@@ -1,0 +1,18 @@
+services:
+  ekoru-blog-community-qa:
+    image: ekoru-blog-community:qa
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    container_name: ekoru-blog-community-qa
+    env_file:
+      - .env.qa
+    ports:
+      - '9004:9004'
+    networks:
+      - ekoru-network
+
+networks:
+  ekoru-network:
+    external: true
