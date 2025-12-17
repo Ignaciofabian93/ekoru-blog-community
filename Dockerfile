@@ -3,7 +3,9 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package.json ./
+
+COPY package-lock.json ./
 
 RUN npm ci
 
@@ -19,7 +21,9 @@ FROM node:22-alpine
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json ./
+COPY package.json ./
+
+COPY package-lock.json ./
 
 # Install only production dependencies
 RUN npm ci --only=production
