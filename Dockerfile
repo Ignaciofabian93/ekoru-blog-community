@@ -42,4 +42,4 @@ USER appuser
 
 CMD [ "node", "dist/main.js" ]
 
-EXPOSE 9004
+EXPOSE 4004

@@ -9,7 +9,7 @@ services:
     env_file:
       - .env.qa
     ports:
-      - '9004:9004'
+      - '4004:4004'
     networks:
       - ekoru-network
     deploy:
