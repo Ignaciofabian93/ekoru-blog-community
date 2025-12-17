@@ -36,8 +36,8 @@ RUN npx --yes prisma@5.22.0 generate
 COPY --from=builder /app/dist ./dist
 
 # Create non-root user
-RUN addgroup -g 1000 appgroup && \
-    adduser -D -u 1000 -G appgroup appuser && \
+RUN addgroup -g 1001 appgroup && \
+    adduser -D -u 1001 -G appgroup appuser && \
     chown -R appuser:appgroup /app
 
 USER appuser
