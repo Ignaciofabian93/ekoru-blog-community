@@ -1,7 +1,7 @@
 import { BlogType, BlogReactionType } from '../graphql/enums';
 
 // Prisma types for Blog entities (matching Prisma schema exactly)
-export interface PrismaBlogPost {
+export interface BlogPost {
   id: number;
   title: string;
   content: string;
@@ -14,14 +14,14 @@ export interface PrismaBlogPost {
   type: BlogType;
 }
 
-export interface PrismaBlogCategory {
+export interface BlogCategory {
   id: number;
   name: string;
   icon: string | null;
   description: string | null;
 }
 
-export interface PrismaBlogReaction {
+export interface BlogReaction {
   id: number;
   blogPostId: number;
   sellerId: string;
@@ -31,16 +31,16 @@ export interface PrismaBlogReaction {
 }
 
 // Extended types with relations
-export interface PrismaBlogCategoryWithPosts extends PrismaBlogCategory {
-  posts: PrismaBlogPost[];
+export interface BlogCategoryWithPosts extends BlogCategory {
+  posts: BlogPost[];
 }
 
-export interface PrismaBlogPostWithCategory extends PrismaBlogPost {
-  blogCategory: PrismaBlogCategory;
+export interface BlogPostWithCategory extends BlogPost {
+  blogCategory: BlogCategory;
 }
 
-export interface PrismaBlogPostWithReactions extends PrismaBlogPost {
-  reactions: PrismaBlogReaction[];
+export interface BlogPostWithReactions extends BlogPost {
+  reactions: BlogReaction[];
 }
 
 // Utility types for service methods
@@ -84,14 +84,14 @@ export interface BlogReactionFindFirstOptions {
 export interface BlogReactionCountOptions {
   where: {
     blogPostId: number;
-    reaction: BlogReactionType;
+    reaction: BlogReaction;
   };
 }
 
 export interface BlogReactionCreateInput {
   blogPostId: number;
   sellerId: string;
-  reaction: BlogReactionType;
+  reaction: BlogReaction;
   updatedAt: Date;
 }
 

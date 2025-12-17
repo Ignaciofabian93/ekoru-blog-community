@@ -17,10 +17,10 @@ import {
   createPaginatedResponse,
 } from '../common/utils/pagination';
 import {
-  PrismaBlogCategory,
-  PrismaBlogCategoryWithPosts,
-  PrismaBlogPost,
-  PrismaBlogReaction,
+  BlogCategory,
+  BlogCategoryWithPosts,
+  BlogPost,
+  BlogReaction,
   BlogPostUpdateData,
 } from '../types';
 import { CacheService } from '../common/services';
@@ -32,14 +32,14 @@ export class BlogService {
     private readonly cache: CacheService,
   ) {}
 
-  async getBlogCatalog(): Promise<PrismaBlogCategory[]> {
+  async getBlogCatalog(): Promise<BlogCategory[]> {
     try {
       // Cache for 5 minutes (300 seconds) - categories don't change often
       return await this.cache.getOrSet(
         'blog:categories:catalog',
         async () => {
           const categories =
-            (await this.prisma.blogCategory.findMany()) as PrismaBlogCategory[];
+            (await this.prisma.blogCategory.findMany()) as BlogCategory[];
 
           if (!categories || categories.length === 0) {
             throw new NotFoundError('No se encontraron categorías de blogs');
@@ -56,7 +56,7 @@ export class BlogService {
     }
   }
 
-  async getBlogCategories(): Promise<PrismaBlogCategoryWithPosts[]> {
+  async getBlogCategories(): Promise<BlogCategoryWithPosts[]> {
     // Cache for 2 minutes (120 seconds) - includes posts count
     return await this.cache.getOrSet(
       'blog:categories:with-posts',
@@ -65,7 +65,7 @@ export class BlogService {
           include: {
             posts: true,
           },
-        })) as PrismaBlogCategoryWithPosts[];
+        })) as BlogCategoryWithPosts[];
 
         if (!categories || categories.length === 0) {
           throw new NotFoundError('No se encontraron categorías de blogs');
@@ -97,7 +97,7 @@ export class BlogService {
         },
         take,
         skip,
-      })) as PrismaBlogPost[];
+      })) as BlogPost[];
 
       if (!blogs || blogs.length === 0) {
         throw new NotFoundError('No se encontraron blogs');
@@ -120,7 +120,7 @@ export class BlogService {
 
       const blog = (await this.prisma.blogPost.findFirst({
         where: { id: parsedId },
-      })) as PrismaBlogPost | null;
+      })) as BlogPost | null;
 
       if (!blog) {
         throw new NotFoundError('Blog no encontrado');
@@ -158,7 +158,7 @@ export class BlogService {
         },
         take,
         skip,
-      })) as PrismaBlogPost[];
+      })) as BlogPost[];
 
       return createPaginatedResponse(blogs, totalCount, page, pageSize);
     } catch (error) {
@@ -187,7 +187,7 @@ export class BlogService {
         },
         take,
         skip,
-      })) as PrismaBlogPost[];
+      })) as BlogPost[];
 
       return createPaginatedResponse(blogs, totalCount, page, pageSize);
     } catch (error) {
@@ -260,7 +260,7 @@ export class BlogService {
           blogPostId: id,
           sellerId,
         },
-      })) as PrismaBlogReaction | null;
+      })) as BlogReaction | null;
 
       if (checkExisting?.reaction === BlogReactionType.DISLIKE) {
         await this.prisma.blogReaction.delete({
@@ -303,7 +303,7 @@ export class BlogService {
   async createBlogPost(
     input: CreateBlogPostInput,
     authorId: string,
-  ): Promise<PrismaBlogPost> {
+  ): Promise<BlogPost> {
     try {
       const blog = (await this.prisma.blogPost.create({
         data: {
@@ -314,7 +314,7 @@ export class BlogService {
           authorId,
           updatedAt: new Date(),
         },
-      })) as PrismaBlogPost;
+      })) as BlogPost;
 
       // Invalidate relevant caches
       this.cache.invalidateByPattern('blog:categories');
@@ -327,7 +327,7 @@ export class BlogService {
     }
   }
 
-  async updateBlogPost(input: UpdateBlogPostInput): Promise<PrismaBlogPost> {
+  async updateBlogPost(input: UpdateBlogPostInput): Promise<BlogPost> {
     try {
       const updateData: BlogPostUpdateData = {
         updatedAt: new Date(),
@@ -343,7 +343,7 @@ export class BlogService {
       const blog = (await this.prisma.blogPost.update({
         where: { id: input.id },
         data: updateData,
-      })) as PrismaBlogPost;
+      })) as BlogPost;
 
       // Invalidate caches
       this.cache.delete(`blog:post:${input.id}`);
@@ -359,7 +359,7 @@ export class BlogService {
     }
   }
 
-  async publishBlogPost(id: number): Promise<PrismaBlogPost> {
+  async publishBlogPost(id: number): Promise<BlogPost> {
     try {
       const blog = (await this.prisma.blogPost.update({
         where: { id },
@@ -368,7 +368,7 @@ export class BlogService {
           publishedAt: new Date(),
           updatedAt: new Date(),
         },
-      })) as PrismaBlogPost;
+      })) as BlogPost;
 
       // Invalidate caches
       this.cache.delete(`blog:post:${id}`);
@@ -384,7 +384,7 @@ export class BlogService {
     }
   }
 
-  async unpublishBlogPost(id: number): Promise<PrismaBlogPost> {
+  async unpublishBlogPost(id: number): Promise<BlogPost> {
     try {
       const blog = (await this.prisma.blogPost.update({
         where: { id },
@@ -393,7 +393,7 @@ export class BlogService {
           publishedAt: null,
           updatedAt: new Date(),
         },
-      })) as PrismaBlogPost;
+      })) as BlogPost;
 
       // Invalidate caches
       this.cache.delete(`blog:post:${id}`);
