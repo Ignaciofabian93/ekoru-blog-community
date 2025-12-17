@@ -9,6 +9,7 @@ import { Request, Response } from 'express';
 import { PrismaModule } from './prisma/prisma.module';
 import { BlogModule } from './blog/blog.module';
 import { CommunityModule } from './community/community.module';
+import { HealthController } from './health/health.controller';
 import { JSONScalar } from './graphql/scalars';
 import configuration from './config/configuration';
 
@@ -52,6 +53,7 @@ import './graphql/enums';
     BlogModule,
     CommunityModule,
   ],
+  controllers: [HealthController],
   providers: [JSONScalar],
 })
 export class AppModule {}
