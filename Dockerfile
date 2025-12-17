@@ -11,8 +11,6 @@ RUN npm ci
 
 COPY . .
 
-RUN npx prisma generate
-
 RUN npm run build
 
 # Production stage
@@ -31,8 +29,8 @@ RUN npm ci --only=production
 # Copy prisma schema for runtime
 COPY prisma ./prisma
 
-# Generate Prisma Client
-RUN npx prisma generate
+# Generate Prisma Client using locally installed version
+RUN npx --yes prisma@5.22.0 generate
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
