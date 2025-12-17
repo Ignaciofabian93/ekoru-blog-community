@@ -8,7 +8,11 @@ import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [PrismaModule],
-  providers: [CommunityService, CommunityPostResolver, CommunityCommentResolver],
+  providers: [
+    CommunityService,
+    CommunityPostResolver,
+    CommunityCommentResolver,
+  ],
   exports: [CommunityService],
 })
 export class CommunityModule {}

@@ -12,6 +12,28 @@ services:
       - '9004:9004'
     networks:
       - ekoru-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75' # Maximum 0.75 CPU cores (less for QA)
+          memory: 384M # Maximum 384MB RAM (less for QA)
+        reservations:
+          cpus: '0.15' # Minimum 0.15 CPU cores reserved
+          memory: 192M # Minimum 192MB RAM reserved
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--quiet',
+          '--tries=1',
+          '--spider',
+          'http://localhost:9004/graphql',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 networks:
   ekoru-network:

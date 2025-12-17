@@ -58,7 +58,10 @@ export class CommunityPostResolver {
     @Args('authorId', { type: () => ID }) authorId: string,
     @Args('input', { nullable: true }) input?: PaginationInput,
   ) {
-    return this.communityService.getCommunityPostsByAuthor(authorId, input || {});
+    return this.communityService.getCommunityPostsByAuthor(
+      authorId,
+      input || {},
+    );
   }
 
   @Query(() => CommunityCommentsConnection, { name: 'communityComments' })

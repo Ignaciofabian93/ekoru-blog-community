@@ -10,7 +10,7 @@ export class NotFoundError extends GraphQLError {
   }
 }
 
-export class UnAuthorizedError extends GraphQLError {
+export class UnauthorizedError extends GraphQLError {
   constructor(message: string) {
     super(message, {
       extensions: {

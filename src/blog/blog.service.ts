@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BlogType, BlogReactionType } from '../graphql/enums';
-import { CreateBlogPostInput, UpdateBlogPostInput, PaginationInput } from './dto';
+import {
+  CreateBlogPostInput,
+  UpdateBlogPostInput,
+  PaginationInput,
+} from './dto';
 import {
   NotFoundError,
   BadRequestError,
@@ -12,20 +16,39 @@ import {
   calculatePrismaParams,
   createPaginatedResponse,
 } from '../common/utils/pagination';
+import {
+  PrismaBlogCategory,
+  PrismaBlogCategoryWithPosts,
+  PrismaBlogPost,
+  PrismaBlogReaction,
+  BlogPostUpdateData,
+} from '../types';
+import { CacheService } from '../common/services';
 
 @Injectable()
 export class BlogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
+  ) {}
 
-  async getBlogCatalog() {
+  async getBlogCatalog(): Promise<PrismaBlogCategory[]> {
     try {
-      const categories = await this.prisma.blogCategory.findMany();
+      // Cache for 5 minutes (300 seconds) - categories don't change often
+      return await this.cache.getOrSet(
+        'blog:categories:catalog',
+        async () => {
+          const categories =
+            (await this.prisma.blogCategory.findMany()) as PrismaBlogCategory[];
 
-      if (!categories || categories.length === 0) {
-        throw new NotFoundError('No se encontraron categorías de blogs');
-      }
+          if (!categories || categories.length === 0) {
+            throw new NotFoundError('No se encontraron categorías de blogs');
+          }
 
-      return categories;
+          return categories;
+        },
+        300,
+      );
     } catch (error) {
       if (error instanceof NotFoundError) throw error;
       console.error('Error al intentar obtener el catálogo de blogs:', error);
@@ -33,18 +56,25 @@ export class BlogService {
     }
   }
 
-  async getBlogCategories() {
-    const categories = await this.prisma.blogCategory.findMany({
-      include: {
-        posts: true,
+  async getBlogCategories(): Promise<PrismaBlogCategoryWithPosts[]> {
+    // Cache for 2 minutes (120 seconds) - includes posts count
+    return await this.cache.getOrSet(
+      'blog:categories:with-posts',
+      async () => {
+        const categories = (await this.prisma.blogCategory.findMany({
+          include: {
+            posts: true,
+          },
+        })) as PrismaBlogCategoryWithPosts[];
+
+        if (!categories || categories.length === 0) {
+          throw new NotFoundError('No se encontraron categorías de blogs');
+        }
+
+        return categories;
       },
-    });
-
-    if (!categories || categories.length === 0) {
-      throw new NotFoundError('No se encontraron categorías de blogs');
-    }
-
-    return categories;
+      120,
+    );
   }
 
   async getBlogs(input: PaginationInput) {
@@ -52,13 +82,13 @@ export class BlogService {
       const { page = 1, pageSize = 10 } = input;
       const { take, skip } = calculatePrismaParams(page, pageSize);
 
-      const totalCount = await this.prisma.blogPost.count({
+      const totalCount = (await this.prisma.blogPost.count({
         where: {
           isPublished: true,
         },
-      });
+      })) as number;
 
-      const blogs = await this.prisma.blogPost.findMany({
+      const blogs = (await this.prisma.blogPost.findMany({
         where: {
           isPublished: true,
         },
@@ -67,7 +97,7 @@ export class BlogService {
         },
         take,
         skip,
-      });
+      })) as PrismaBlogPost[];
 
       if (!blogs || blogs.length === 0) {
         throw new NotFoundError('No se encontraron blogs');
@@ -88,9 +118,9 @@ export class BlogService {
         throw new BadRequestError('Se requiere un ID de blog válido');
       }
 
-      const blog = await this.prisma.blogPost.findFirst({
+      const blog = (await this.prisma.blogPost.findFirst({
         where: { id: parsedId },
-      });
+      })) as PrismaBlogPost | null;
 
       if (!blog) {
         throw new NotFoundError('Blog no encontrado');
@@ -98,10 +128,7 @@ export class BlogService {
 
       return blog;
     } catch (error) {
-      if (
-        error instanceof NotFoundError ||
-        error instanceof BadRequestError
-      ) {
+      if (error instanceof NotFoundError || error instanceof BadRequestError) {
         throw error;
       }
       console.error('Error getting blog:', error);
@@ -114,14 +141,14 @@ export class BlogService {
       const { page = 1, pageSize = 10 } = input;
       const { take, skip } = calculatePrismaParams(page, pageSize);
 
-      const totalCount = await this.prisma.blogPost.count({
+      const totalCount = (await this.prisma.blogPost.count({
         where: {
           isPublished: true,
           type: category,
         },
-      });
+      })) as number;
 
-      const blogs = await this.prisma.blogPost.findMany({
+      const blogs = (await this.prisma.blogPost.findMany({
         where: {
           isPublished: true,
           type: category,
@@ -131,7 +158,7 @@ export class BlogService {
         },
         take,
         skip,
-      });
+      })) as PrismaBlogPost[];
 
       return createPaginatedResponse(blogs, totalCount, page, pageSize);
     } catch (error) {
@@ -145,13 +172,13 @@ export class BlogService {
       const { page = 1, pageSize = 10 } = input;
       const { take, skip } = calculatePrismaParams(page, pageSize);
 
-      const totalCount = await this.prisma.blogPost.count({
+      const totalCount = (await this.prisma.blogPost.count({
         where: {
           authorId,
         },
-      });
+      })) as number;
 
-      const blogs = await this.prisma.blogPost.findMany({
+      const blogs = (await this.prisma.blogPost.findMany({
         where: {
           authorId,
         },
@@ -160,7 +187,7 @@ export class BlogService {
         },
         take,
         skip,
-      });
+      })) as PrismaBlogPost[];
 
       return createPaginatedResponse(blogs, totalCount, page, pageSize);
     } catch (error) {
@@ -171,7 +198,7 @@ export class BlogService {
     }
   }
 
-  async likeBlog(id: number, sellerId: string) {
+  async likeBlog(id: number, sellerId: string): Promise<boolean> {
     try {
       if (!sellerId) {
         throw new UnauthorizedError('No autorizado');
@@ -222,18 +249,18 @@ export class BlogService {
     }
   }
 
-  async dislikeBlog(id: number, sellerId: string) {
+  async dislikeBlog(id: number, sellerId: string): Promise<boolean> {
     try {
       if (!sellerId) {
         throw new UnauthorizedError('No autorizado');
       }
 
-      const checkExisting = await this.prisma.blogReaction.findFirst({
+      const checkExisting = (await this.prisma.blogReaction.findFirst({
         where: {
           blogPostId: id,
           sellerId,
         },
-      });
+      })) as PrismaBlogReaction | null;
 
       if (checkExisting?.reaction === BlogReactionType.DISLIKE) {
         await this.prisma.blogReaction.delete({
@@ -273,9 +300,12 @@ export class BlogService {
     }
   }
 
-  async createBlogPost(input: CreateBlogPostInput, authorId: string) {
+  async createBlogPost(
+    input: CreateBlogPostInput,
+    authorId: string,
+  ): Promise<PrismaBlogPost> {
     try {
-      const blog = await this.prisma.blogPost.create({
+      const blog = (await this.prisma.blogPost.create({
         data: {
           title: input.title,
           content: input.content,
@@ -284,7 +314,11 @@ export class BlogService {
           authorId,
           updatedAt: new Date(),
         },
-      });
+      })) as PrismaBlogPost;
+
+      // Invalidate relevant caches
+      this.cache.invalidateByPattern('blog:categories');
+      this.cache.invalidateByPattern('blog:posts');
 
       return blog;
     } catch (error) {
@@ -293,9 +327,9 @@ export class BlogService {
     }
   }
 
-  async updateBlogPost(input: UpdateBlogPostInput) {
+  async updateBlogPost(input: UpdateBlogPostInput): Promise<PrismaBlogPost> {
     try {
-      const updateData: Record<string, unknown> = {
+      const updateData: BlogPostUpdateData = {
         updatedAt: new Date(),
       };
 
@@ -306,10 +340,15 @@ export class BlogService {
       }
       if (input.type !== undefined) updateData.type = input.type;
 
-      const blog = await this.prisma.blogPost.update({
+      const blog = (await this.prisma.blogPost.update({
         where: { id: input.id },
         data: updateData,
-      });
+      })) as PrismaBlogPost;
+
+      // Invalidate caches
+      this.cache.delete(`blog:post:${input.id}`);
+      this.cache.invalidateByPattern('blog:categories');
+      this.cache.invalidateByPattern('blog:posts');
 
       return blog;
     } catch (error) {
@@ -320,34 +359,46 @@ export class BlogService {
     }
   }
 
-  async publishBlogPost(id: number) {
+  async publishBlogPost(id: number): Promise<PrismaBlogPost> {
     try {
-      const blog = await this.prisma.blogPost.update({
+      const blog = (await this.prisma.blogPost.update({
         where: { id },
         data: {
           isPublished: true,
           publishedAt: new Date(),
           updatedAt: new Date(),
         },
-      });
+      })) as PrismaBlogPost;
+
+      // Invalidate caches
+      this.cache.delete(`blog:post:${id}`);
+      this.cache.invalidateByPattern('blog:categories');
+      this.cache.invalidateByPattern('blog:posts');
 
       return blog;
     } catch (error) {
       console.error('Error publishing blog post:', error);
-      throw new InternalServerError('Error al publicar la publicación del blog');
+      throw new InternalServerError(
+        'Error al publicar la publicación del blog',
+      );
     }
   }
 
-  async unpublishBlogPost(id: number) {
+  async unpublishBlogPost(id: number): Promise<PrismaBlogPost> {
     try {
-      const blog = await this.prisma.blogPost.update({
+      const blog = (await this.prisma.blogPost.update({
         where: { id },
         data: {
           isPublished: false,
           publishedAt: null,
           updatedAt: new Date(),
         },
-      });
+      })) as PrismaBlogPost;
+
+      // Invalidate caches
+      this.cache.delete(`blog:post:${id}`);
+      this.cache.invalidateByPattern('blog:categories');
+      this.cache.invalidateByPattern('blog:posts');
 
       return blog;
     } catch (error) {
@@ -358,11 +409,16 @@ export class BlogService {
     }
   }
 
-  async deleteBlogPost(id: number) {
+  async deleteBlogPost(id: number): Promise<boolean> {
     try {
       await this.prisma.blogPost.delete({
         where: { id },
       });
+
+      // Invalidate caches
+      this.cache.delete(`blog:post:${id}`);
+      this.cache.invalidateByPattern('blog:categories');
+      this.cache.invalidateByPattern('blog:posts');
 
       return true;
     } catch (error) {
@@ -374,20 +430,26 @@ export class BlogService {
   }
 
   async getBlogLikes(blogPostId: number): Promise<number> {
-    return this.prisma.blogReaction.count({
+    return (await this.prisma.blogReaction.count({
       where: {
         blogPostId,
         reaction: BlogReactionType.LIKE,
       },
-    });
+    })) as number;
   }
 
   async getBlogDislikes(blogPostId: number): Promise<number> {
-    return this.prisma.blogReaction.count({
-      where: {
-        blogPostId,
-        reaction: BlogReactionType.DISLIKE,
-      },
-    });
+    try {
+      const count = (await this.prisma.blogReaction.count({
+        where: {
+          blogPostId,
+          reaction: BlogReactionType.DISLIKE,
+        },
+      })) as number;
+      return count;
+    } catch (error) {
+      console.error('Error getting blog dislikes:', error);
+      throw new InternalServerError('Error al obtener los dislikes del blog');
+    }
   }
 }

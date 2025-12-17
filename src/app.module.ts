@@ -9,7 +9,7 @@ import { Request, Response } from 'express';
 import { PrismaModule } from './prisma/prisma.module';
 import { BlogModule } from './blog/blog.module';
 import { CommunityModule } from './community/community.module';
-import { DateTimeScalar, JSONScalar } from './graphql/scalars';
+import { JSONScalar } from './graphql/scalars';
 import configuration from './config/configuration';
 
 // Import to register enums
@@ -52,6 +52,6 @@ import './graphql/enums';
     BlogModule,
     CommunityModule,
   ],
-  providers: [DateTimeScalar, JSONScalar],
+  providers: [JSONScalar],
 })
 export class AppModule {}
