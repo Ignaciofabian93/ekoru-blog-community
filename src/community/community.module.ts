@@ -5,6 +5,7 @@ import {
   CommunityCommentResolver,
 } from './community.resolver';
 import { PrismaModule } from '../prisma/prisma.module';
+import { CacheService } from '../common/services';
 
 @Module({
   imports: [PrismaModule],
@@ -12,6 +13,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     CommunityService,
     CommunityPostResolver,
     CommunityCommentResolver,
+    CacheService,
   ],
   exports: [CommunityService],
 })

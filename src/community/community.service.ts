@@ -16,24 +16,36 @@ import {
   calculatePrismaParams,
   createPaginatedResponse,
 } from '../common/utils/pagination';
+import { CacheService } from 'src/common/services';
 
 @Injectable()
 export class CommunityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
+  ) {}
 
   async getCommunityCatalog() {
     try {
-      const categories = await this.prisma.communityCategory.findMany({
-        include: {
-          subcategories: true,
+      return await this.cache.getOrSet(
+        'community:categories:catalog',
+        async () => {
+          const categories = await this.prisma.communityCategory.findMany({
+            include: {
+              subcategories: true,
+            },
+          });
+
+          if (!categories || categories.length === 0) {
+            throw new NotFoundError(
+              'No se encontraron categorías de comunidad',
+            );
+          }
+
+          return categories;
         },
-      });
-
-      if (!categories || categories.length === 0) {
-        throw new NotFoundError('No se encontró el catálogo de comunidad');
-      }
-
-      return categories;
+        300, // Cache for 5 minutes
+      );
     } catch (error) {
       if (error instanceof NotFoundError) throw error;
       console.error(

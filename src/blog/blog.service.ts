@@ -1,11 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BlogType, BlogReactionType } from '../graphql/enums';
-import {
-  CreateBlogPostInput,
-  UpdateBlogPostInput,
-  PaginationInput,
-} from './dto';
+import { PaginationInput } from './dto';
 import {
   NotFoundError,
   BadRequestError,
@@ -21,7 +17,6 @@ import {
   BlogCategoryWithPosts,
   BlogPost,
   BlogReaction,
-  BlogPostUpdateData,
 } from '../types';
 import { CacheService } from '../common/services';
 
@@ -297,159 +292,6 @@ export class BlogService {
       if (error instanceof UnauthorizedError) throw error;
       console.error('Error disliking blog:', error);
       throw new InternalServerError('Error al dar no me gusta al blog');
-    }
-  }
-
-  async createBlogPost(
-    input: CreateBlogPostInput,
-    authorId: string,
-  ): Promise<BlogPost> {
-    try {
-      const blog = (await this.prisma.blogPost.create({
-        data: {
-          title: input.title,
-          content: input.content,
-          blogCategoryId: input.categoryId,
-          type: input.type,
-          authorId,
-          updatedAt: new Date(),
-        },
-      })) as BlogPost;
-
-      // Invalidate relevant caches
-      this.cache.invalidateByPattern('blog:categories');
-      this.cache.invalidateByPattern('blog:posts');
-
-      return blog;
-    } catch (error) {
-      console.error('Error creating blog post:', error);
-      throw new InternalServerError('Error al crear la publicación del blog');
-    }
-  }
-
-  async updateBlogPost(input: UpdateBlogPostInput): Promise<BlogPost> {
-    try {
-      const updateData: BlogPostUpdateData = {
-        updatedAt: new Date(),
-      };
-
-      if (input.title !== undefined) updateData.title = input.title;
-      if (input.content !== undefined) updateData.content = input.content;
-      if (input.categoryId !== undefined) {
-        updateData.blogCategory = { connect: { id: input.categoryId } };
-      }
-      if (input.type !== undefined) updateData.type = input.type;
-
-      const blog = (await this.prisma.blogPost.update({
-        where: { id: input.id },
-        data: updateData,
-      })) as BlogPost;
-
-      // Invalidate caches
-      this.cache.delete(`blog:post:${input.id}`);
-      this.cache.invalidateByPattern('blog:categories');
-      this.cache.invalidateByPattern('blog:posts');
-
-      return blog;
-    } catch (error) {
-      console.error('Error updating blog post:', error);
-      throw new InternalServerError(
-        'Error al actualizar la publicación del blog',
-      );
-    }
-  }
-
-  async publishBlogPost(id: number): Promise<BlogPost> {
-    try {
-      const blog = (await this.prisma.blogPost.update({
-        where: { id },
-        data: {
-          isPublished: true,
-          publishedAt: new Date(),
-          updatedAt: new Date(),
-        },
-      })) as BlogPost;
-
-      // Invalidate caches
-      this.cache.delete(`blog:post:${id}`);
-      this.cache.invalidateByPattern('blog:categories');
-      this.cache.invalidateByPattern('blog:posts');
-
-      return blog;
-    } catch (error) {
-      console.error('Error publishing blog post:', error);
-      throw new InternalServerError(
-        'Error al publicar la publicación del blog',
-      );
-    }
-  }
-
-  async unpublishBlogPost(id: number): Promise<BlogPost> {
-    try {
-      const blog = (await this.prisma.blogPost.update({
-        where: { id },
-        data: {
-          isPublished: false,
-          publishedAt: null,
-          updatedAt: new Date(),
-        },
-      })) as BlogPost;
-
-      // Invalidate caches
-      this.cache.delete(`blog:post:${id}`);
-      this.cache.invalidateByPattern('blog:categories');
-      this.cache.invalidateByPattern('blog:posts');
-
-      return blog;
-    } catch (error) {
-      console.error('Error unpublishing blog post:', error);
-      throw new InternalServerError(
-        'Error al despublicar la publicación del blog',
-      );
-    }
-  }
-
-  async deleteBlogPost(id: number): Promise<boolean> {
-    try {
-      await this.prisma.blogPost.delete({
-        where: { id },
-      });
-
-      // Invalidate caches
-      this.cache.delete(`blog:post:${id}`);
-      this.cache.invalidateByPattern('blog:categories');
-      this.cache.invalidateByPattern('blog:posts');
-
-      return true;
-    } catch (error) {
-      console.error('Error deleting blog post:', error);
-      throw new InternalServerError(
-        'Error al eliminar la publicación del blog',
-      );
-    }
-  }
-
-  async getBlogLikes(blogPostId: number): Promise<number> {
-    return (await this.prisma.blogReaction.count({
-      where: {
-        blogPostId,
-        reaction: BlogReactionType.LIKE,
-      },
-    })) as number;
-  }
-
-  async getBlogDislikes(blogPostId: number): Promise<number> {
-    try {
-      const count = (await this.prisma.blogReaction.count({
-        where: {
-          blogPostId,
-          reaction: BlogReactionType.DISLIKE,
-        },
-      })) as number;
-      return count;
-    } catch (error) {
-      console.error('Error getting blog dislikes:', error);
-      throw new InternalServerError('Error al obtener los dislikes del blog');
     }
   }
 }

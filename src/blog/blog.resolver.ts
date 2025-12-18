@@ -11,11 +11,7 @@ import {
 } from '@nestjs/graphql';
 import { BlogService } from './blog.service';
 import { BlogPost, BlogCategory, BlogPostsConnection, Admin } from './entities';
-import {
-  CreateBlogPostInput,
-  UpdateBlogPostInput,
-  PaginationInput,
-} from './dto';
+import { PaginationInput } from './dto';
 import { BlogType } from '../graphql/enums';
 import { CurrentSeller } from '../common/decorators/current-seller.decorator';
 
@@ -59,34 +55,6 @@ export class BlogResolver {
     return this.blogService.getBlogsByAuthor(authorId, input || {});
   }
 
-  @Mutation(() => BlogPost)
-  createBlogPost(
-    @Args('input') input: CreateBlogPostInput,
-    @CurrentSeller() sellerId: string,
-  ) {
-    return this.blogService.createBlogPost(input, sellerId || 'temp-admin-id');
-  }
-
-  @Mutation(() => BlogPost)
-  updateBlogPost(@Args('input') input: UpdateBlogPostInput) {
-    return this.blogService.updateBlogPost(input);
-  }
-
-  @Mutation(() => BlogPost)
-  publishBlogPost(@Args('id', { type: () => Int }) id: number) {
-    return this.blogService.publishBlogPost(id);
-  }
-
-  @Mutation(() => BlogPost)
-  unpublishBlogPost(@Args('id', { type: () => Int }) id: number) {
-    return this.blogService.unpublishBlogPost(id);
-  }
-
-  @Mutation(() => Boolean)
-  deleteBlogPost(@Args('id', { type: () => Int }) id: number) {
-    return this.blogService.deleteBlogPost(id);
-  }
-
   @Mutation(() => Boolean)
   likeBlog(
     @Args('id', { type: () => Int }) id: number,
@@ -101,16 +69,6 @@ export class BlogResolver {
     @CurrentSeller() sellerId: string,
   ) {
     return this.blogService.dislikeBlog(id, sellerId);
-  }
-
-  @ResolveField(() => Int, { nullable: true })
-  async likes(@Parent() blogPost: BlogPost) {
-    return this.blogService.getBlogLikes(blogPost.id);
-  }
-
-  @ResolveField(() => Int, { nullable: true })
-  async dislikes(@Parent() blogPost: BlogPost) {
-    return this.blogService.getBlogDislikes(blogPost.id);
   }
 
   @ResolveField(() => Admin, { nullable: true })

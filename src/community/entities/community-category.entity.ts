@@ -6,8 +6,8 @@ export class CommunityCategory {
   @Field(() => ID)
   id: number;
 
-  @Field()
-  name: string;
+  @Field(() => String, { nullable: false })
+  category: string;
 
   @Field(() => String, { nullable: true })
   icon?: string | null;

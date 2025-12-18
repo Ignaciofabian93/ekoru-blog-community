@@ -6,7 +6,7 @@ export class CommunitySubCategory {
   id: number;
 
   @Field()
-  name: string;
+  subCategory: string;
 
   @Field(() => String, { nullable: true })
   icon?: string | null;
