@@ -1,7 +1,12 @@
-version: '0.2'
+version: "0.2"
 ignorePaths: []
 dictionaryDefinitions: []
 dictionaries: []
-words: ['nestjs', 'ekoru', 'EKORU']
+words:
+  - cpus
+  - ekoru
+  - EKORU
+  - healthcheck
+  - nestjs
 ignoreWords: []
 import: []

@@ -9,17 +9,17 @@ services:
     env_file:
       - .env.qa
     ports:
-      - '4004:4004'
+      - '4006:4006'
     networks:
       - ekoru-network
     deploy:
       resources:
         limits:
-          cpus: '0.75' # Maximum 0.75 CPU cores (less for QA)
-          memory: 384M # Maximum 384MB RAM (less for QA)
+          cpus: '0.5' # Maximum 0.5 CPU cores (QA environment)
+          memory: 512M # Maximum 512MB RAM (QA environment)
         reservations:
-          cpus: '0.15' # Minimum 0.15 CPU cores reserved
-          memory: 192M # Minimum 192MB RAM reserved
+          cpus: '0.25' # Minimum 0.25 CPU cores reserved
+          memory: 256M # Minimum 256MB RAM reserved
     healthcheck:
       test:
         [
@@ -28,7 +28,7 @@ services:
           '--quiet',
           '--tries=1',
           '--spider',
-          'http://localhost:4004/health',
+          'http://localhost:4006/health',
         ]
       interval: 30s
       timeout: 10s
