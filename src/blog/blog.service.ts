@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { BlogType, Language } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { BlogType, BlogReactionType } from '../graphql/enums';
+import { BlogReactionType } from '../graphql/enums';
 import { PaginationInput } from './dto';
 import {
   NotFoundError,
@@ -22,6 +23,8 @@ import { CacheService } from '../common/services';
 
 @Injectable()
 export class BlogService {
+  private readonly logger = new Logger(BlogService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
@@ -33,12 +36,25 @@ export class BlogService {
       return await this.cache.getOrSet(
         'blog:categories:catalog',
         async () => {
-          const categories =
-            (await this.prisma.blogCategory.findMany()) as BlogCategory[];
+          const raw = await this.prisma.blogCategory.findMany({
+            include: {
+              translations: {
+                where: { language: Language.ES },
+                take: 1,
+              },
+            },
+          });
 
-          if (!categories || categories.length === 0) {
+          if (!raw || raw.length === 0) {
             throw new NotFoundError('No se encontraron categorías de blogs');
           }
+
+          const categories: BlogCategory[] = raw.map((cat) => ({
+            id: cat.id,
+            icon: cat.icon,
+            name: cat.translations[0]?.name ?? '',
+            description: cat.translations[0]?.description ?? null,
+          }));
 
           return categories;
         },
@@ -46,7 +62,10 @@ export class BlogService {
       );
     } catch (error) {
       if (error instanceof NotFoundError) throw error;
-      console.error('Error al intentar obtener el catálogo de blogs:', error);
+      this.logger.error(
+        'Error al intentar obtener el catálogo de blogs:',
+        error,
+      );
       throw new InternalServerError('Error al obtener el catálogo de blogs');
     }
   }
@@ -56,15 +75,45 @@ export class BlogService {
     return await this.cache.getOrSet(
       'blog:categories:with-posts',
       async () => {
-        const categories = (await this.prisma.blogCategory.findMany({
+        const raw = await this.prisma.blogCategory.findMany({
           include: {
-            posts: true,
+            translations: {
+              where: { language: Language.ES },
+              take: 1,
+            },
+            posts: {
+              include: {
+                translations: {
+                  where: { language: Language.ES },
+                  take: 1,
+                },
+              },
+            },
           },
-        })) as BlogCategoryWithPosts[];
+        });
 
-        if (!categories || categories.length === 0) {
+        if (!raw || raw.length === 0) {
           throw new NotFoundError('No se encontraron categorías de blogs');
         }
+
+        const categories: BlogCategoryWithPosts[] = raw.map((cat) => ({
+          id: cat.id,
+          icon: cat.icon,
+          name: cat.translations[0]?.name ?? '',
+          description: cat.translations[0]?.description ?? null,
+          posts: cat.posts.map((post) => ({
+            id: post.id,
+            authorId: post.authorId,
+            blogCategoryId: post.blogCategoryId,
+            isPublished: post.isPublished,
+            publishedAt: post.publishedAt,
+            createdAt: post.createdAt,
+            updatedAt: post.updatedAt,
+            type: post.type,
+            title: post.translations[0]?.title ?? '',
+            content: post.translations[0]?.content ?? '',
+          })),
+        }));
 
         return categories;
       },
@@ -83,7 +132,7 @@ export class BlogService {
         },
       })) as number;
 
-      const blogs = (await this.prisma.blogPost.findMany({
+      const raw = await this.prisma.blogPost.findMany({
         where: {
           isPublished: true,
         },
@@ -92,16 +141,35 @@ export class BlogService {
         },
         take,
         skip,
-      })) as BlogPost[];
+        include: {
+          translations: {
+            where: { language: Language.ES },
+            take: 1,
+          },
+        },
+      });
 
-      if (!blogs || blogs.length === 0) {
+      if (!raw || raw.length === 0) {
         throw new NotFoundError('No se encontraron blogs');
       }
+
+      const blogs: BlogPost[] = raw.map((post) => ({
+        id: post.id,
+        authorId: post.authorId,
+        blogCategoryId: post.blogCategoryId,
+        isPublished: post.isPublished,
+        publishedAt: post.publishedAt,
+        createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
+        type: post.type,
+        title: post.translations[0]?.title ?? '',
+        content: post.translations[0]?.content ?? '',
+      }));
 
       return createPaginatedResponse(blogs, totalCount, page, pageSize);
     } catch (error) {
       if (error instanceof NotFoundError) throw error;
-      console.error('Error getting blogs:', error);
+      this.logger.error('Error getting blogs:', error);
       throw new InternalServerError('Error al obtener los blogs');
     }
   }
@@ -126,7 +194,7 @@ export class BlogService {
       if (error instanceof NotFoundError || error instanceof BadRequestError) {
         throw error;
       }
-      console.error('Error getting blog:', error);
+      this.logger.error('Error getting blog:', error);
       throw new InternalServerError('Error al obtener el blog');
     }
   }
@@ -143,7 +211,7 @@ export class BlogService {
         },
       })) as number;
 
-      const blogs = (await this.prisma.blogPost.findMany({
+      const raw = await this.prisma.blogPost.findMany({
         where: {
           isPublished: true,
           type: category,
@@ -153,11 +221,30 @@ export class BlogService {
         },
         take,
         skip,
-      })) as BlogPost[];
+        include: {
+          translations: {
+            where: { language: Language.ES },
+            take: 1,
+          },
+        },
+      });
+
+      const blogs: BlogPost[] = raw.map((post) => ({
+        id: post.id,
+        authorId: post.authorId,
+        blogCategoryId: post.blogCategoryId,
+        isPublished: post.isPublished,
+        publishedAt: post.publishedAt,
+        createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
+        type: post.type,
+        title: post.translations[0]?.title ?? '',
+        content: post.translations[0]?.content ?? '',
+      }));
 
       return createPaginatedResponse(blogs, totalCount, page, pageSize);
     } catch (error) {
-      console.error('Error getting blogs by category:', error);
+      this.logger.error('Error getting blogs by category:', error);
       throw new InternalServerError('Error al obtener los blogs por categoría');
     }
   }
@@ -173,7 +260,7 @@ export class BlogService {
         },
       })) as number;
 
-      const blogs = (await this.prisma.blogPost.findMany({
+      const raw = await this.prisma.blogPost.findMany({
         where: {
           authorId,
         },
@@ -182,11 +269,30 @@ export class BlogService {
         },
         take,
         skip,
-      })) as BlogPost[];
+        include: {
+          translations: {
+            where: { language: Language.ES },
+            take: 1,
+          },
+        },
+      });
+
+      const blogs: BlogPost[] = raw.map((post) => ({
+        id: post.id,
+        authorId: post.authorId,
+        blogCategoryId: post.blogCategoryId,
+        isPublished: post.isPublished,
+        publishedAt: post.publishedAt,
+        createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
+        type: post.type,
+        title: post.translations[0]?.title ?? '',
+        content: post.translations[0]?.content ?? '',
+      }));
 
       return createPaginatedResponse(blogs, totalCount, page, pageSize);
     } catch (error) {
-      console.error('Error getting blogs by author:', error);
+      this.logger.error('Error getting blogs by author:', error);
       throw new InternalServerError(
         'Error al obtener los blogs del administrador',
       );
@@ -239,7 +345,7 @@ export class BlogService {
       return true;
     } catch (error) {
       if (error instanceof UnauthorizedError) throw error;
-      console.error('Error liking blog:', error);
+      this.logger.error('Error liking blog:', error);
       throw new InternalServerError('Error al dar me gusta al blog');
     }
   }
@@ -290,7 +396,7 @@ export class BlogService {
       return true;
     } catch (error) {
       if (error instanceof UnauthorizedError) throw error;
-      console.error('Error disliking blog:', error);
+      this.logger.error('Error disliking blog:', error);
       throw new InternalServerError('Error al dar no me gusta al blog');
     }
   }

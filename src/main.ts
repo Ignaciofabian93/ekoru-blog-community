@@ -25,7 +25,7 @@ async function bootstrap() {
     }),
   );
 
-  const port = configService.get<number>('PORT') || 4004;
+  const port = configService.get<number>('PORT') || 4006;
   await app.listen(port);
 
   logger.log(`Blog & Community subgraph is running on port ${port}`);

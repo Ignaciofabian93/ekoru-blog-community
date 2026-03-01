@@ -1,4 +1,5 @@
-import { BlogType, BlogReactionType } from '../graphql/enums';
+import { BlogType } from '@prisma/client';
+import { BlogReactionType } from '../graphql/enums';
 
 // Prisma types for Blog entities (matching Prisma schema exactly)
 export interface BlogPost {

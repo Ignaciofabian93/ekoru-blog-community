@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateCommunityPostInput,
@@ -16,10 +16,12 @@ import {
   calculatePrismaParams,
   createPaginatedResponse,
 } from '../common/utils/pagination';
-import { CacheService } from 'src/common/services';
+import { CacheService } from '../common/services';
 
 @Injectable()
 export class CommunityService {
+  private readonly logger = new Logger(CommunityService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
@@ -48,7 +50,7 @@ export class CommunityService {
       );
     } catch (error) {
       if (error instanceof NotFoundError) throw error;
-      console.error(
+      this.logger.error(
         'Error al intentar obtener el catálogo de comunidad:',
         error,
       );
@@ -73,7 +75,7 @@ export class CommunityService {
       return categories;
     } catch (error) {
       if (error instanceof NotFoundError) throw error;
-      console.error('Error getting community categories:', error);
+      this.logger.error('Error getting community categories:', error);
       throw new InternalServerError(
         'Error al obtener las categorías de comunidad',
       );
@@ -89,11 +91,7 @@ export class CommunityService {
 
       const posts = await this.prisma.communityPost.findMany({
         include: {
-          author: true,
           communityComment: {
-            include: {
-              seller: true,
-            },
             orderBy: {
               createdAt: 'desc',
             },
@@ -113,7 +111,7 @@ export class CommunityService {
       return createPaginatedResponse(posts, totalCount, page, pageSize);
     } catch (error) {
       if (error instanceof NotFoundError) throw error;
-      console.error('Error getting community posts:', error);
+      this.logger.error('Error getting community posts:', error);
       throw new InternalServerError(
         'Error al obtener las publicaciones de comunidad',
       );
@@ -129,11 +127,7 @@ export class CommunityService {
       const post = await this.prisma.communityPost.findFirst({
         where: { id },
         include: {
-          author: true,
           communityComment: {
-            include: {
-              seller: true,
-            },
             orderBy: {
               createdAt: 'desc',
             },
@@ -150,7 +144,7 @@ export class CommunityService {
       if (error instanceof NotFoundError || error instanceof BadRequestError) {
         throw error;
       }
-      console.error('Error getting community post:', error);
+      this.logger.error('Error getting community post:', error);
       throw new InternalServerError(
         'Error al obtener la publicación de comunidad',
       );
@@ -173,11 +167,7 @@ export class CommunityService {
           authorId,
         },
         include: {
-          author: true,
           communityComment: {
-            include: {
-              seller: true,
-            },
             orderBy: {
               createdAt: 'desc',
             },
@@ -192,7 +182,7 @@ export class CommunityService {
 
       return createPaginatedResponse(posts, totalCount, page, pageSize);
     } catch (error) {
-      console.error('Error getting community posts by author:', error);
+      this.logger.error('Error getting community posts by author:', error);
       throw new InternalServerError(
         'Error al obtener las publicaciones de comunidad del autor',
       );
@@ -215,7 +205,6 @@ export class CommunityService {
           communityPostId: postId,
         },
         include: {
-          seller: true,
           communityPost: true,
         },
         orderBy: {
@@ -227,7 +216,7 @@ export class CommunityService {
 
       return createPaginatedResponse(comments, totalCount, page, pageSize);
     } catch (error) {
-      console.error('Error getting community comments:', error);
+      this.logger.error('Error getting community comments:', error);
       throw new InternalServerError(
         'Error al obtener los comentarios de la comunidad',
       );
@@ -245,18 +234,13 @@ export class CommunityService {
           updatedAt: new Date(),
         },
         include: {
-          author: true,
-          communityComment: {
-            include: {
-              seller: true,
-            },
-          },
+          communityComment: true,
         },
       });
 
       return post;
     } catch (error) {
-      console.error('Error creating community post:', error);
+      this.logger.error('Error creating community post:', error);
       throw new InternalServerError(
         'Error al crear la publicación de comunidad',
       );
@@ -282,18 +266,13 @@ export class CommunityService {
         where: { id: input.id },
         data: updateData,
         include: {
-          author: true,
-          communityComment: {
-            include: {
-              seller: true,
-            },
-          },
+          communityComment: true,
         },
       });
 
       return post;
     } catch (error) {
-      console.error('Error updating community post:', error);
+      this.logger.error('Error updating community post:', error);
       throw new InternalServerError(
         'Error al actualizar la publicación de comunidad',
       );
@@ -308,7 +287,7 @@ export class CommunityService {
 
       return true;
     } catch (error) {
-      console.error('Error deleting community post:', error);
+      this.logger.error('Error deleting community post:', error);
       throw new InternalServerError(
         'Error al eliminar la publicación de comunidad',
       );
@@ -326,18 +305,13 @@ export class CommunityService {
           updatedAt: new Date(),
         },
         include: {
-          author: true,
-          communityComment: {
-            include: {
-              seller: true,
-            },
-          },
+          communityComment: true,
         },
       });
 
       return post;
     } catch (error) {
-      console.error('Error liking community post:', error);
+      this.logger.error('Error liking community post:', error);
       throw new InternalServerError(
         'Error al dar me gusta a la publicación de comunidad',
       );
@@ -368,18 +342,13 @@ export class CommunityService {
           updatedAt: new Date(),
         },
         include: {
-          seller: true,
-          communityPost: {
-            include: {
-              author: true,
-            },
-          },
+          communityPost: true,
         },
       });
 
       return comment;
     } catch (error) {
-      console.error('Error creating community comment:', error);
+      this.logger.error('Error creating community comment:', error);
       throw new InternalServerError(
         'Error al crear el comentario de comunidad',
       );
@@ -395,18 +364,13 @@ export class CommunityService {
           updatedAt: new Date(),
         },
         include: {
-          seller: true,
-          communityPost: {
-            include: {
-              author: true,
-            },
-          },
+          communityPost: true,
         },
       });
 
       return comment;
     } catch (error) {
-      console.error('Error updating community comment:', error);
+      this.logger.error('Error updating community comment:', error);
       throw new InternalServerError(
         'Error al actualizar el comentario de comunidad',
       );
@@ -443,7 +407,7 @@ export class CommunityService {
       return true;
     } catch (error) {
       if (error instanceof NotFoundError) throw error;
-      console.error('Error deleting community comment:', error);
+      this.logger.error('Error deleting community comment:', error);
       throw new InternalServerError(
         'Error al eliminar el comentario de comunidad',
       );
