@@ -1,22 +1,24 @@
+name: ekoru-blog-community-staging
+
 services:
-  ekoru-blog-community-qa:
-    image: ekoru-blog-community:qa
+  ekoru-blog-community-staging:
+    image: ekoru-blog-community:staging
     build:
       context: .
       dockerfile: Dockerfile
     restart: always
-    container_name: ekoru-blog-community-qa
+    container_name: ekoru-blog-community-staging
     env_file:
-      - .env.qa
+      - .env.staging
     ports:
-      - '4006:4006'
+      - '4005:4005'
     networks:
-      - ekoru-network
+      - ekoru-staging-network
     deploy:
       resources:
         limits:
-          cpus: '0.5' # Maximum 0.5 CPU cores (QA environment)
-          memory: 512M # Maximum 512MB RAM (QA environment)
+          cpus: '0.5' # Maximum 0.5 CPU cores (Staging environment)
+          memory: 512M # Maximum 512MB RAM (Staging environment)
         reservations:
           cpus: '0.25' # Minimum 0.25 CPU cores reserved
           memory: 256M # Minimum 256MB RAM reserved
@@ -28,7 +30,7 @@ services:
           '--quiet',
           '--tries=1',
           '--spider',
-          'http://localhost:4006/health',
+          'http://localhost:4005/health',
         ]
       interval: 30s
       timeout: 10s
@@ -36,5 +38,5 @@ services:
       start_period: 40s
 
 networks:
-  ekoru-network:
+  ekoru-staging-network:
     external: true
