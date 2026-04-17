@@ -40,7 +40,7 @@ export class CommunityCategoryResolver {
     @Args('slug') slug: string,
     @Args('language', { type: () => Language }) language: Language,
     @Context() context: GraphQLContext,
-  ): Promise<CommunityCategory> {
+  ): Promise<CommunityCategory | null> {
     this.logger.debug(
       `Query: getCommunityCategoryBySlug - slug: ${slug}, language: ${language}`,
     );

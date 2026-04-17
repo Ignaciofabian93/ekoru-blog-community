@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 import { BlogCatalogEntity } from '../catalog-v2/entities/blog-catalog.entity';
 import { BlogCatalogService } from '../services/blog-catalog.service';
-import { Language } from '../types/enums';
+import { Language } from '@prisma/client';
 import { BlogCatalog } from '../types/blog-catalog';
 
 @Injectable()

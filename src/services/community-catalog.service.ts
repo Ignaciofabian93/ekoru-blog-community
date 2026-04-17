@@ -48,7 +48,7 @@ export class CommunityCatalogService {
   async getCommunitySubCategoryBySlug(
     slug: string,
     language: Language,
-  ): Promise<CommunitySubCategory> {
+  ): Promise<CommunitySubCategory | null> {
     this.logger.debug(
       `getCommunitySubCategoryBySlug - slug: ${slug}, language: ${language}`,
     );
