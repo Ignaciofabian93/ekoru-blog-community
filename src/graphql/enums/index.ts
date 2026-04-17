@@ -1,5 +1,5 @@
 import { registerEnumType } from '@nestjs/graphql';
-import { BlogType } from '@prisma/client';
+import { BlogType, Language } from '@prisma/client';
 
 export { BlogType };
 
@@ -9,6 +9,11 @@ export enum BlogReactionType {
 }
 
 // Register enums with GraphQL
+registerEnumType(Language, {
+  name: 'Language',
+  description: 'Supported languages for multi-language content',
+});
+
 registerEnumType(BlogType, {
   name: 'BlogType',
   description: 'Blog post category types',

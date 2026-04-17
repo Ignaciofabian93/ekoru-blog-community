@@ -16,20 +16,12 @@ datasource db {
 // ─── Enums ───────────────────────────────────────────────────────────────────────
 
 enum BlogType {
-  RECYCLING
-  POLLUTION
-  SUSTAINABILITY
-  CIRCULAR_ECONOMY
-  USED_PRODUCTS
-  REUSE
-  ENVIRONMENT
-  UPCYCLING
-  RESPONSIBLE_CONSUMPTION
-  ECO_TIPS
-  ENVIRONMENTAL_IMPACT
   SUSTAINABLE_LIVING
-  OTHER
-  SECURITY
+  CONSCIOUS_CONSUMPTION
+  ENVIRONMENT_AND_PLANET
+  GREEN_ENTREPENEURSHIP
+  COMMUNITY_AND_PLATFORM
+  EKORU_TIPS
 }
 
 enum Language {
@@ -55,7 +47,7 @@ model BlogPost {
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
   blogCategoryId Int
-  type           BlogType              @default(OTHER)
+  type           BlogType              @default(SUSTAINABLE_LIVING)
   dislikes       Int                   @default(0)
   likes          Int                   @default(0)
   blogCategory   BlogCategory          @relation(fields: [blogCategoryId], references: [id])
