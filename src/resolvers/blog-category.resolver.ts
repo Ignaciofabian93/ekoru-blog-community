@@ -16,7 +16,7 @@ import type {
 import type { GraphQLContext } from '../types/graphql-context.interface';
 import { BlogCategory as BlogCategoryEntity } from '../catalog-v2/entities/blog-category.entity';
 import { BlogCategoryTranslation as BlogCategoryTranslationEntity } from '../catalog-v2/entities/blog-category-translation.entity';
-import { BlogCatalogService } from '../catalog-v2/blog-catalog.service';
+import { BlogCatalogService } from '../services/blog-catalog.service';
 
 /**
  * Blog Category GraphQL Resolver
@@ -36,7 +36,7 @@ export class BlogCategoryResolver {
     @Args('slug') slug: string,
     @Args('language', { type: () => Language }) language: Language,
     @Context() context: GraphQLContext,
-  ): Promise<BlogCategory> {
+  ): Promise<BlogCategory | null> {
     this.logger.debug(
       `Query: getBlogCategoryBySlug - slug: ${slug}, language: ${language}`,
     );
