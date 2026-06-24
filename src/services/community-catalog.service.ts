@@ -25,30 +25,39 @@ export class CommunityCatalogService {
     return this.communityCatalogRepository.getCommunityCatalog(lang as any);
   }
 
-  async getCommunityCategoryBySlug(
-    slug: string,
-    language: Language,
-  ): Promise<CommunityCategory | null> {
+  async getCommunityCategoryBySlug({
+    slug,
+    language,
+  }: {
+    slug: string;
+    language: Language;
+  }): Promise<CommunityCategory | null> {
     this.logger.debug(
       `getCommunityCategoryBySlug - slug: ${slug}, language: ${language}`,
     );
     return this.communityCategoryRepository.findBySlug(slug, language);
   }
 
-  async getCommunityCategories(
-    limit: number,
-    offset: number,
-  ): Promise<CommunityCategory[]> {
+  async getCommunityCategories({
+    limit,
+    offset,
+  }: {
+    limit: number;
+    offset: number;
+  }): Promise<CommunityCategory[]> {
     this.logger.debug(
       `getCommunityCategories - limit: ${limit}, offset: ${offset}`,
     );
     return this.communityCategoryRepository.findAll(limit, offset);
   }
 
-  async getCommunitySubCategoryBySlug(
-    slug: string,
-    language: Language,
-  ): Promise<CommunitySubCategory | null> {
+  async getCommunitySubCategoryBySlug({
+    slug,
+    language,
+  }: {
+    slug: string;
+    language: Language;
+  }): Promise<CommunitySubCategory | null> {
     this.logger.debug(
       `getCommunitySubCategoryBySlug - slug: ${slug}, language: ${language}`,
     );

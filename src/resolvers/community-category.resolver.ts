@@ -45,10 +45,10 @@ export class CommunityCategoryResolver {
       `Query: getCommunityCategoryBySlug - slug: ${slug}, language: ${language}`,
     );
     context.language = language;
-    return this.communityCatalogService.getCommunityCategoryBySlug(
+    return this.communityCatalogService.getCommunityCategoryBySlug({
       slug,
       language,
-    );
+    });
   }
 
   @Query(() => [CommunityCategoryEntity])
@@ -66,7 +66,10 @@ export class CommunityCategoryResolver {
     context.language = language;
 
     const categories =
-      await this.communityCatalogService.getCommunityCategories(limit, offset);
+      await this.communityCatalogService.getCommunityCategories({
+        limit,
+        offset,
+      });
 
     // Prime category translation cache
     if (categories.length > 0) {

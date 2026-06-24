@@ -41,7 +41,7 @@ export class BlogCategoryResolver {
       `Query: getBlogCategoryBySlug - slug: ${slug}, language: ${language}`,
     );
     context.language = language;
-    return this.blogCatalogService.getBlogCategoryBySlug(slug, language);
+    return this.blogCatalogService.getBlogCategoryBySlug({ slug, language });
   }
 
   @Query(() => [BlogCategoryEntity])
@@ -58,10 +58,10 @@ export class BlogCategoryResolver {
 
     context.language = language;
 
-    const categories = await this.blogCatalogService.getBlogCategories(
+    const categories = await this.blogCatalogService.getBlogCategories({
       limit,
       offset,
-    );
+    });
 
     // Prime translation cache to avoid N+1 on translation ResolveField
     if (categories.length > 0) {

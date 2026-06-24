@@ -22,20 +22,26 @@ export class BlogCatalogService {
     return this.blogCatalogRepository.getBlogCatalog(lang);
   }
 
-  async getBlogCategoryBySlug(
-    slug: string,
-    language: Language,
-  ): Promise<BlogCategory | null> {
+  async getBlogCategoryBySlug({
+    slug,
+    language,
+  }: {
+    slug: string;
+    language: Language;
+  }): Promise<BlogCategory | null> {
     this.logger.debug(
       `getBlogCategoryBySlug - slug: ${slug}, language: ${language}`,
     );
     return this.blogCategoryRepository.findBySlug(slug, language);
   }
 
-  async getBlogCategories(
-    limit: number,
-    offset: number,
-  ): Promise<BlogCategory[]> {
+  async getBlogCategories({
+    limit,
+    offset,
+  }: {
+    limit: number;
+    offset: number;
+  }): Promise<BlogCategory[]> {
     this.logger.debug(`getBlogCategories - limit: ${limit}, offset: ${offset}`);
     return this.blogCategoryRepository.findAll(limit, offset);
   }

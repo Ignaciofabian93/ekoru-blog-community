@@ -43,10 +43,10 @@ export class CommunitySubCategoryResolver {
       `Query: getCommunitySubCategoryBySlug - slug: ${slug}, language: ${language}`,
     );
     context.language = language;
-    return this.communityCatalogService.getCommunitySubCategoryBySlug(
+    return this.communityCatalogService.getCommunitySubCategoryBySlug({
       slug,
       language,
-    );
+    });
   }
 
   /**

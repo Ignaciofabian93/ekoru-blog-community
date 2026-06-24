@@ -50,6 +50,7 @@ export interface GraphQLContext {
   };
 
   sellerId?: string;
+  adminId?: string;
   token?: string;
 }
 

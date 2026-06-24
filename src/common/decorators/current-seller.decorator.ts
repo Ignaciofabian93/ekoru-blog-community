@@ -8,3 +8,11 @@ export const CurrentSeller = createParamDecorator(
     return gqlContext.sellerId;
   },
 );
+
+export const CurrentAdmin = createParamDecorator(
+  (data: unknown, context: ExecutionContext): string | undefined => {
+    const ctx = GqlExecutionContext.create(context);
+    const gqlContext = ctx.getContext<{ adminId?: string }>();
+    return gqlContext.adminId;
+  },
+);

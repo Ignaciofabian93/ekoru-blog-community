@@ -34,6 +34,7 @@ export function createGraphQLContext(
   );
 
   const sellerId = req.headers['x-seller-id'] as string | undefined;
+  const adminId = req.headers['x-admin-id'] as string | undefined;
   const token = req.headers.authorization?.replace('Bearer ', '');
 
   // DataLoaders MUST be fresh per request to prevent stale cache
@@ -59,6 +60,7 @@ export function createGraphQLContext(
     communityCategoryRepository,
     loaders,
     sellerId,
+    adminId,
     token,
   };
 }
