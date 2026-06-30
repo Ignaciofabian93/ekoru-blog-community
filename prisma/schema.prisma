@@ -97,16 +97,16 @@ model BlogReaction {
 }
 
 model BlogCategory {
-  id           Int                      @id @default(autoincrement())
-  icon         String
-  isActive     Boolean                  @default(true)
-  sortOrder    Int                      @default(0)
-  featuredFrom DateTime?
+  id            Int                       @id @default(autoincrement())
+  icon          String
+  isActive      Boolean                   @default(true)
+  sortOrder     Int                       @default(0)
+  featuredFrom  DateTime?
   featuredUntil DateTime?
-  createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @updatedAt
-  posts        BlogPost[]
-  translations BlogCategoryTranslation[]
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  posts         BlogPost[]
+  translations  BlogCategoryTranslation[]
 
   @@index([isActive, sortOrder])
   @@index([featuredUntil])
@@ -164,13 +164,13 @@ model CommunityComment {
 }
 
 model CommunityCategory {
-  id            Int                           @id @default(autoincrement())
-  isActive      Boolean                       @default(true)
-  sortOrder     Int                           @default(0)
+  id            Int                            @id @default(autoincrement())
+  isActive      Boolean                        @default(true)
+  sortOrder     Int                            @default(0)
   featuredFrom  DateTime?
   featuredUntil DateTime?
-  createdAt     DateTime                      @default(now())
-  updatedAt     DateTime                      @updatedAt
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
   subcategories CommunitySubCategory[]
   translations  CommunityCategoryTranslation[]
 
@@ -200,15 +200,15 @@ model CommunityCategoryTranslation {
 }
 
 model CommunitySubCategory {
-  id                  Int                              @id @default(autoincrement())
+  id                  Int                               @id @default(autoincrement())
   communityCategoryId Int
-  isActive            Boolean                          @default(true)
-  sortOrder           Int                              @default(0)
+  isActive            Boolean                           @default(true)
+  sortOrder           Int                               @default(0)
   featuredFrom        DateTime?
   featuredUntil       DateTime?
-  createdAt           DateTime                         @default(now())
-  updatedAt           DateTime                         @updatedAt
-  communityCategory   CommunityCategory                @relation(fields: [communityCategoryId], references: [id])
+  createdAt           DateTime                          @default(now())
+  updatedAt           DateTime                          @updatedAt
+  communityCategory   CommunityCategory                 @relation(fields: [communityCategoryId], references: [id])
   translations        CommunitySubCategoryTranslation[]
 
   @@index([communityCategoryId])
@@ -217,7 +217,7 @@ model CommunitySubCategory {
 }
 
 model CommunitySubCategoryTranslation {
-  id                     Int                    @id @default(autoincrement())
+  id                     Int                  @id @default(autoincrement())
   communitySubCategoryId Int
   language               Language
   subCategory            String
@@ -227,9 +227,9 @@ model CommunitySubCategoryTranslation {
   metaTitle              String?
   metaDescription        String?
   metaKeywords           String[]
-  createdAt              DateTime               @default(now())
-  updatedAt              DateTime               @updatedAt
-  communitySubCategory   CommunitySubCategory   @relation(fields: [communitySubCategoryId], references: [id], onDelete: Cascade)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  communitySubCategory   CommunitySubCategory @relation(fields: [communitySubCategoryId], references: [id], onDelete: Cascade)
 
   @@unique([communitySubCategoryId, language])
   @@unique([slug, language])
