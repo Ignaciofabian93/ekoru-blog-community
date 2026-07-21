@@ -8,6 +8,9 @@ import {
 import { ModuleRef } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
 import { CatalogV2Module } from './catalog-v2/catalog-v2.module';
+import { AdminCatalogModule } from './adminCatalog';
+import { BlogPostsModule } from './blogPosts';
+import { CommunityEventsModule } from './communityEvents';
 import { HealthController } from './health/health.controller';
 import { JSONScalar } from './graphql/scalars';
 import configuration from './config/configuration';
@@ -58,6 +61,13 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 
     // Feature modules
     CatalogV2Module,
+
+    // Platform-admin catalog CRUD (raw reads + bulk upsert/XLSX)
+    AdminCatalogModule,
+
+    // Platform-admin authoring (form-based CRUD)
+    BlogPostsModule,
+    CommunityEventsModule,
   ],
   controllers: [HealthController],
   providers: [JSONScalar],

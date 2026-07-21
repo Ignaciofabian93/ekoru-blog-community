@@ -50,6 +50,8 @@ model BlogPost {
   type           BlogType              @default(SUSTAINABLE_LIVING)
   dislikes       Int                   @default(0)
   likes          Int                   @default(0)
+  // Optional cover image (CDN URL from the R2 image pipeline). A blog has one image or none.
+  coverImage     String?
   blogCategory   BlogCategory          @relation(fields: [blogCategoryId], references: [id])
   blogReactions  BlogReaction[]
   translations   BlogPostTranslation[]
@@ -134,32 +136,39 @@ model BlogCategoryTranslation {
 }
 
 model CommunityPost {
-  id               Int                @id @default(autoincrement())
-  content          String
-  images           String[]
-  likes            Int                @default(0)
-  comments         Int                @default(0)
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  authorId         String
-  title            String
-  communityComment CommunityComment[]
+  id            Int                         @id @default(autoincrement())
+  title         String
+  content       String
+  // Single cover/wallpaper image (CDN URL from the R2 image pipeline).
+  coverImage    String?
+  // Event schedule: a single date uses startDate only; a range fills both.
+  startDate     DateTime?
+  endDate       DateTime?
+  // Available tickets / places. Null = unlimited.
+  capacity      Int?
+  likes         Int                         @default(0)
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+  authorId      String
+  registrations CommunityPostRegistration[]
 
   @@index([createdAt])
   @@index([authorId])
+  @@index([startDate])
 }
 
-model CommunityComment {
+model CommunityPostRegistration {
   id              Int           @id @default(autoincrement())
   communityPostId Int
-  sellerId        String
-  content         String
+  name            String
+  email           String
+  // Optional ekoru profile id, filled in-app when a logged-in user registers.
+  sellerId        String?
   createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  communityPost   CommunityPost @relation(fields: [communityPostId], references: [id])
+  communityPost   CommunityPost @relation(fields: [communityPostId], references: [id], onDelete: Cascade)
 
+  @@unique([communityPostId, email])
   @@index([communityPostId])
-  @@index([createdAt])
   @@index([sellerId])
 }
 
