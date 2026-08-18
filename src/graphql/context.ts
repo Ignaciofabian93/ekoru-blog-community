@@ -5,6 +5,7 @@ import { I18nService } from '../common/i18n';
 import { BlogCategoryRepository } from '../repositories/blog-category.repository';
 import { CommunityCategoryRepository } from '../repositories/community-category.repository';
 import type { GraphQLContext } from '../types/graphql-context.interface';
+import { resolveIdentity } from '../common/identity';
 
 /**
  * GraphQL Context Factory
@@ -32,10 +33,11 @@ export function createGraphQLContext(
   const language = i18nService.parseAcceptLanguage(
     req.headers['accept-language'],
   );
-
-  const sellerId = req.headers['x-seller-id'] as string | undefined;
-  const adminId = req.headers['x-admin-id'] as string | undefined;
-  const token = req.headers.authorization?.replace('Bearer ', '');
+  // Identity comes from the verified access token, not from the gateway's
+  // `x-seller-id` / `x-admin-id` headers — those are unsigned and were
+  // believed unconditionally. See ../common/identity.
+  const { sellerId, adminId, adminRole, adminType, adminSellerId, token } =
+    resolveIdentity(req.headers);
 
   // DataLoaders MUST be fresh per request to prevent stale cache
   const loaders = {
@@ -61,6 +63,9 @@ export function createGraphQLContext(
     loaders,
     sellerId,
     adminId,
+    adminRole,
+    adminType,
+    adminSellerId,
     token,
   };
 }

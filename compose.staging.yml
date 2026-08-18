@@ -10,8 +10,6 @@ services:
     container_name: ekoru-blog-community-staging
     env_file:
       - .env.staging
-    ports:
-      - '4005:4005'
     networks:
       - ekoru-staging-network
     deploy:

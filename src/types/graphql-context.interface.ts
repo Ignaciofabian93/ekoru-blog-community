@@ -49,8 +49,13 @@ export interface GraphQLContext {
     >;
   };
 
+  // Derived from the verified access token (see common/identity.ts), never
+  // from the unsigned x-seller-id / x-admin-id headers.
   sellerId?: string;
   adminId?: string;
+  adminRole?: string;
+  adminType?: string;
+  adminSellerId?: string;
   token?: string;
 }
 
