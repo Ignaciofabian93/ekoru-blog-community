@@ -1,5 +1,13 @@
 import { ArgsType, Field, InputType, Int } from '@nestjs/graphql';
-import { IsEmail, IsInt, IsString, MaxLength, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsEmail,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 /**
  * What an attendee gives when reserving a place. The organiser needs a name and
@@ -34,15 +42,20 @@ export class PublicCommunityEventsArgs {
   @Min(1)
   pageSize: number = 12;
 
+  // Every field needs a class-validator decorator: the global ValidationPipe runs
+  // with forbidNonWhitelisted, so an undecorated field is rejected as unknown.
   @Field(() => Boolean, {
     defaultValue: false,
     description: 'Include events that already finished.',
   })
+  @IsBoolean()
   includePast: boolean = false;
 
   @Field(() => String, {
     nullable: true,
     description: 'Only events organised by this business.',
   })
+  @IsOptional()
+  @IsString()
   authorId?: string;
 }
