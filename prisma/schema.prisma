@@ -15,15 +15,6 @@ datasource db {
 
 // ─── Enums ───────────────────────────────────────────────────────────────────────
 
-enum BlogType {
-  SUSTAINABLE_LIVING
-  CONSCIOUS_CONSUMPTION
-  ENVIRONMENT_AND_PLANET
-  GREEN_ENTREPENEURSHIP
-  COMMUNITY_AND_PLATFORM
-  EKORU_TIPS
-}
-
 enum Language {
   ES
   EN
@@ -72,7 +63,6 @@ model BlogPost {
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
   blogCategoryId Int
-  type           BlogType              @default(SUSTAINABLE_LIVING)
   dislikes       Int                   @default(0)
   likes          Int                   @default(0)
   // Optional cover image (CDN URL from the R2 image pipeline). A blog has one image or none.
@@ -81,7 +71,6 @@ model BlogPost {
   blogReactions  BlogReaction[]
   translations   BlogPostTranslation[]
 
-  @@index([type])
   @@index([isPublished])
   @@index([publishedAt])
 }

@@ -1,4 +1,3 @@
-import { BlogType } from '@prisma/client';
 import { BlogReactionType } from '../graphql/enums';
 
 // Prisma types for Blog entities (matching Prisma schema exactly)
@@ -12,7 +11,6 @@ export interface BlogPost {
   publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  type: BlogType;
 }
 
 export interface BlogCategory {
@@ -48,7 +46,6 @@ export interface BlogPostWithReactions extends BlogPost {
 export interface BlogPostCountOptions {
   where?: {
     isPublished?: boolean;
-    type?: BlogType;
     authorId?: string;
   };
 }
@@ -56,7 +53,6 @@ export interface BlogPostCountOptions {
 export interface BlogPostFindManyOptions {
   where?: {
     isPublished?: boolean;
-    type?: BlogType;
     authorId?: string;
     id?: number;
   };
@@ -108,7 +104,6 @@ export interface BlogPostUpdateData {
       id: number;
     };
   };
-  type?: BlogType;
   isPublished?: boolean;
   publishedAt?: Date | null;
   updatedAt: Date;

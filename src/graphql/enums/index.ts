@@ -1,6 +1,5 @@
 import { registerEnumType } from '@nestjs/graphql';
 import {
-  BlogType,
   CommunityEventLocationType,
   CommunityEventStatus,
   CommunityReportReason,
@@ -9,7 +8,6 @@ import {
 } from '@prisma/client';
 
 export {
-  BlogType,
   CommunityEventLocationType,
   CommunityEventStatus,
   CommunityReportReason,
@@ -31,11 +29,6 @@ export enum BlogReactionType {
 registerEnumType(Language, {
   name: 'Language',
   description: 'Supported languages for multi-language content',
-});
-
-registerEnumType(BlogType, {
-  name: 'BlogType',
-  description: 'Blog post category types',
 });
 
 registerEnumType(BlogReactionType, {

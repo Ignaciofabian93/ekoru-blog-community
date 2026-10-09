@@ -9,7 +9,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
-// The subgraph's graphql/enums re-exports BlogType but NOT Language; the
+// The subgraph's graphql/enums does NOT re-export Language; the
 // registered enum object is Prisma's, so import Language from @prisma/client.
 import { Language } from '@prisma/client';
 

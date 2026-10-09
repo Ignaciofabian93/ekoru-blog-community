@@ -1,5 +1,4 @@
 import { ObjectType, Field, Int } from '@nestjs/graphql';
-import { BlogType } from '../../graphql/enums';
 import { BlogPostTranslationEntity } from './blog-post-translation.entity';
 
 /**
@@ -17,11 +16,6 @@ export class BlogPostEntity {
 
   @Field(() => Int)
   blogCategoryId: number;
-
-  @Field(() => BlogType, {
-    deprecationReason: 'BlogType is being retired (BLC-9): use blogCategoryId.',
-  })
-  type: BlogType;
 
   @Field(() => String, {
     nullable: true,

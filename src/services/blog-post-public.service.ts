@@ -92,7 +92,6 @@ export class BlogPostPublicService {
     return {
       id: row.id,
       blogCategoryId: row.blogCategoryId,
-      type: row.type,
       coverImage: row.coverImage,
       likes: row.likes,
       publishedAt: row.publishedAt,

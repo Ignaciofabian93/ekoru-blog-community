@@ -9,7 +9,6 @@ import {
   Min,
 } from 'class-validator';
 import { Language } from '@prisma/client';
-import { BlogType } from '../../graphql/enums';
 
 /** Args for the paginated admin blog-post list. */
 @ArgsType()
@@ -40,15 +39,6 @@ export class CreateBlogPostInput {
   @IsInt()
   blogCategoryId: number;
 
-  @Field(() => BlogType, {
-    nullable: true,
-    deprecationReason:
-      'Ignored. BlogType is being retired (BLC-9): use blogCategoryId.',
-  })
-  @IsOptional()
-  @IsEnum(BlogType)
-  type?: BlogType;
-
   @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
@@ -66,15 +56,6 @@ export class UpdateBlogPostInput {
   @IsOptional()
   @IsInt()
   blogCategoryId?: number;
-
-  @Field(() => BlogType, {
-    nullable: true,
-    deprecationReason:
-      'Ignored. BlogType is being retired (BLC-9): use blogCategoryId.',
-  })
-  @IsOptional()
-  @IsEnum(BlogType)
-  type?: BlogType;
 
   @Field(() => String, { nullable: true })
   @IsOptional()

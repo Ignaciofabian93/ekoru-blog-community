@@ -1,6 +1,5 @@
 import { ObjectType, Field, Int } from '@nestjs/graphql';
 import { Language } from '@prisma/client';
-import { BlogType } from '../../graphql/enums';
 import { PageInfoEntity } from '../../common/entities/page-info.entity';
 
 /**
@@ -47,11 +46,6 @@ export class BlogPostEntity {
 
   @Field(() => Int)
   blogCategoryId: number;
-
-  @Field(() => BlogType, {
-    deprecationReason: 'BlogType is being retired (BLC-9): use blogCategoryId.',
-  })
-  type: BlogType;
 
   @Field(() => String, {
     nullable: true,

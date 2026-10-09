@@ -1,5 +1,3 @@
-import { BlogType } from './enums';
-
 export type BlogPost = {
   id: number;
   authorId: string;
@@ -7,7 +5,6 @@ export type BlogPost = {
   createdAt: Date;
   updatedAt: Date;
   blogCatalogId: number;
-  type: BlogType;
   dislikes: number;
   likes: number;
   blogCategory: string;
