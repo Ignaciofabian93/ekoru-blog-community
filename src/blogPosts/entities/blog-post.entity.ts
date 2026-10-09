@@ -18,7 +18,9 @@ export class BlogPostEntity {
   @Field(() => Int)
   blogCategoryId: number;
 
-  @Field(() => BlogType)
+  @Field(() => BlogType, {
+    deprecationReason: 'BlogType is being retired (BLC-9): use blogCategoryId.',
+  })
   type: BlogType;
 
   @Field(() => String, {

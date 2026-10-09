@@ -20,6 +20,17 @@ export class UnauthorizedError extends GraphQLError {
   }
 }
 
+/** Signed in, but not allowed. Clients keep the session (unlike UNAUTHORIZED). */
+export class ForbiddenError extends GraphQLError {
+  constructor(message: string) {
+    super(message, {
+      extensions: {
+        code: 'FORBIDDEN',
+      },
+    });
+  }
+}
+
 export class BadRequestError extends GraphQLError {
   constructor(message: string) {
     super(message, {

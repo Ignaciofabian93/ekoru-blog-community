@@ -51,9 +51,34 @@ export class PublicCommunityEventsArgs {
   @IsBoolean()
   includePast: boolean = false;
 
+  @Field(() => Int, {
+    nullable: true,
+    description: 'Only events of this community category.',
+  })
+  @IsOptional()
+  @IsInt()
+  communityCategoryId?: number;
+
+  @Field(() => Int, {
+    nullable: true,
+    description: 'Only events of this community subcategory.',
+  })
+  @IsOptional()
+  @IsInt()
+  communitySubCategoryId?: number;
+
   @Field(() => String, {
     nullable: true,
-    description: 'Only events organised by this business.',
+    description: 'Only events organised by this business (seller id).',
+  })
+  @IsOptional()
+  @IsString()
+  organizerId?: string;
+
+  @Field(() => String, {
+    nullable: true,
+    deprecationReason: 'Use organizerId.',
+    description: 'Deprecated alias of organizerId.',
   })
   @IsOptional()
   @IsString()

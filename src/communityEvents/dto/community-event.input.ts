@@ -1,5 +1,15 @@
 import { ArgsType, Field, InputType, Int } from '@nestjs/graphql';
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { CommunityEventLocationType } from '@prisma/client';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 @ArgsType()
 export class AdminCommunityEventsArgs {
@@ -75,6 +85,49 @@ export class CreateCommunityEventInput {
   @IsInt()
   @Min(0)
   capacity?: number | null;
+
+  @Field(() => Int, {
+    nullable: true,
+    description: 'Community subcategory (kind of event). Required.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  communitySubCategoryId?: number | null;
+
+  @Field(() => CommunityEventLocationType, {
+    nullable: true,
+    description: 'IN_PERSON (default), ONLINE or HYBRID',
+  })
+  @IsOptional()
+  @IsEnum(CommunityEventLocationType)
+  locationType?: CommunityEventLocationType;
+
+  @Field(() => String, {
+    nullable: true,
+    description: 'Street address. Required for IN_PERSON and HYBRID.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  address?: string | null;
+
+  @Field(() => Int, {
+    nullable: true,
+    description: 'County (comuna) id. Required for IN_PERSON and HYBRID.',
+  })
+  @IsOptional()
+  @IsInt()
+  countyId?: number | null;
+
+  @Field(() => String, {
+    nullable: true,
+    description: 'Join link (http/https). Required for ONLINE and HYBRID.',
+  })
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  @MaxLength(500)
+  onlineUrl?: string | null;
 }
 
 @InputType()
@@ -106,4 +159,63 @@ export class UpdateCommunityEventInput {
   @IsInt()
   @Min(0)
   capacity?: number | null;
+
+  @Field(() => Int, {
+    nullable: true,
+    description: 'Community subcategory (kind of event). Cannot be cleared.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  communitySubCategoryId?: number | null;
+
+  @Field(() => CommunityEventLocationType, {
+    nullable: true,
+    description: 'IN_PERSON, ONLINE or HYBRID',
+  })
+  @IsOptional()
+  @IsEnum(CommunityEventLocationType)
+  locationType?: CommunityEventLocationType;
+
+  @Field(() => String, {
+    nullable: true,
+    description: 'Street address. Required for IN_PERSON and HYBRID.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  address?: string | null;
+
+  @Field(() => Int, {
+    nullable: true,
+    description: 'County (comuna) id. Required for IN_PERSON and HYBRID.',
+  })
+  @IsOptional()
+  @IsInt()
+  countyId?: number | null;
+
+  @Field(() => String, {
+    nullable: true,
+    description: 'Join link (http/https). Required for ONLINE and HYBRID.',
+  })
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  @MaxLength(500)
+  onlineUrl?: string | null;
+}
+
+@ArgsType()
+export class CancelCommunityEventArgs {
+  @Field(() => Int)
+  @IsInt()
+  id: number;
+
+  @Field(() => String, {
+    nullable: true,
+    description: 'Shown to registrants in the cancellation email',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string | null;
 }

@@ -1,6 +1,6 @@
 import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 import { Logger } from '@nestjs/common';
-import { CurrentAdmin } from '../common/decorators';
+import { CurrentAdmin, CurrentLanguage } from '../common/decorators';
 import {
   CommunityEventEntity,
   CommunityEventConnectionEntity,
@@ -11,6 +11,7 @@ import {
   CommunityRegistrationsArgs,
   CreateCommunityEventInput,
   UpdateCommunityEventInput,
+  CancelCommunityEventArgs,
 } from './dto';
 import { CommunityEventService } from './community-event.service';
 
@@ -89,9 +90,26 @@ export class CommunityEventResolver {
     return this.eventService.updateEvent({ adminId, id, input });
   }
 
+  @Mutation(() => CommunityEventEntity, {
+    description:
+      'Cancel a community event and tell everyone registered. Admins only.',
+  })
+  async cancelCommunityEvent(
+    @Args() { id, reason }: CancelCommunityEventArgs,
+    @CurrentAdmin() adminId?: string,
+    @CurrentLanguage() language?: string,
+  ) {
+    return this.eventService.cancelAdminEvent({
+      adminId,
+      id,
+      reason,
+      language,
+    });
+  }
+
   @Mutation(() => Boolean, {
     description:
-      'Delete a community event (registrations cascade). Admins only.',
+      'Delete a community event (registrations cascade and nobody is told; cancel instead when people registered). Admins only.',
   })
   async deleteCommunityEvent(
     @Args('id', { type: () => Int }) id: number,

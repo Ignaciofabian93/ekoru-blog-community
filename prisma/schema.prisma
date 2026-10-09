@@ -37,6 +37,31 @@ enum BlogReactionType {
   DISLIKE
 }
 
+enum CommunityEventStatus {
+  SCHEDULED
+  CANCELLED
+}
+
+enum CommunityEventLocationType {
+  IN_PERSON
+  ONLINE
+  HYBRID
+}
+
+enum CommunityReportReason {
+  SPAM
+  SCAM
+  INAPPROPRIATE
+  MISLEADING
+  OTHER
+}
+
+enum CommunityReportStatus {
+  OPEN
+  DISMISSED
+  ACTIONED
+}
+
 // ─── Models ──────────────────────────────────────────────────────────────────────
 
 model BlogPost {
@@ -136,24 +161,49 @@ model BlogCategoryTranslation {
 }
 
 model CommunityPost {
-  id            Int                         @id @default(autoincrement())
-  title         String
-  content       String
+  id                     Int                         @id @default(autoincrement())
+  title                  String
+  content                String
   // Single cover/wallpaper image (CDN URL from the R2 image pipeline).
-  coverImage    String?
+  coverImage             String?
   // Event schedule: a single date uses startDate only; a range fills both.
-  startDate     DateTime?
-  endDate       DateTime?
+  startDate              DateTime?
+  endDate                DateTime?
   // Available tickets / places. Null = unlimited.
-  capacity      Int?
-  likes         Int                         @default(0)
-  createdAt     DateTime                    @default(now())
-  updatedAt     DateTime                    @updatedAt
-  authorId      String
-  registrations CommunityPostRegistration[]
+  capacity               Int?
+  likes                  Int                         @default(0)
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+  // Admin who created the event from the panel. Null when a business
+  // organised it from the app (see organizerId).
+  authorId               String?
+  // Business (seller) that organises the event. Set for events published from
+  // the app; null for events EKORU runs itself from the panel.
+  organizerId            String?
+  // Where it happens: IN_PERSON needs address + countyId, ONLINE needs
+  // onlineUrl, HYBRID needs all three. Validated in ekoru-blog-community.
+  locationType           CommunityEventLocationType  @default(IN_PERSON)
+  address                String?
+  countyId               Int?
+  onlineUrl              String?
+  // Cancelled events stay for the record; registrants are told (BLC-6).
+  status                 CommunityEventStatus        @default(SCHEDULED)
+  cancelledAt            DateTime?
+  cancellationReason     String?
+  // What kind of event it is; drives /community/[category]/[subcategory].
+  // Required for new events (checked in ekoru-blog-community); null on
+  // events created before categories existed.
+  communitySubCategoryId Int?
+  communitySubCategory   CommunitySubCategory?       @relation(fields: [communitySubCategoryId], references: [id])
+  registrations          CommunityPostRegistration[]
+  reports                CommunityPostReport[]
 
   @@index([createdAt])
   @@index([authorId])
+  @@index([organizerId])
+  @@index([countyId])
+  @@index([communitySubCategoryId])
+  @@index([status])
   @@index([startDate])
 }
 
@@ -170,6 +220,24 @@ model CommunityPostRegistration {
   @@unique([communityPostId, email])
   @@index([communityPostId])
   @@index([sellerId])
+}
+
+model CommunityPostReport {
+  id              Int                   @id @default(autoincrement())
+  communityPostId Int
+  reporterId      String
+  reason          CommunityReportReason
+  details         String?
+  status          CommunityReportStatus @default(OPEN)
+  // Admin who resolved it (plain id, like BusinessProfile.reviewedById).
+  resolvedById    String?
+  resolvedAt      DateTime?
+  resolutionNote  String?
+  createdAt       DateTime              @default(now())
+  communityPost   CommunityPost         @relation(fields: [communityPostId], references: [id], onDelete: Cascade)
+
+  @@unique([communityPostId, reporterId])
+  @@index([status, createdAt])
 }
 
 model CommunityCategory {
@@ -219,6 +287,7 @@ model CommunitySubCategory {
   updatedAt           DateTime                          @updatedAt
   communityCategory   CommunityCategory                 @relation(fields: [communityCategoryId], references: [id])
   translations        CommunitySubCategoryTranslation[]
+  communityPosts      CommunityPost[]
 
   @@index([communityCategoryId])
   @@index([isActive, sortOrder])

@@ -5,8 +5,10 @@ import {
   ApolloFederationDriver,
   ApolloFederationDriverConfig,
 } from '@nestjs/apollo';
-import { ModuleRef } from '@nestjs/core';
+import { APP_GUARD, ModuleRef } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
+import { GqlThrottlerGuard } from './common/guards/gql-throttler.guard';
 import { CatalogV2Module } from './catalog-v2/catalog-v2.module';
 import { AdminCatalogModule } from './adminCatalog';
 import { BlogPostsModule } from './blogPosts';
@@ -33,6 +35,15 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
       isGlobal: true,
       load: [configuration],
     }),
+
+    // Rate limiting: 100 requests per minute per visitor (x-client-ip from
+    // the gateway). Guest registration has its own, stricter limit.
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100,
+      },
+    ]),
 
     // GraphQL Federation
     GraphQLModule.forRootAsync<ApolloFederationDriverConfig>({
@@ -70,6 +81,6 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
     CommunityEventsModule,
   ],
   controllers: [HealthController],
-  providers: [JSONScalar],
+  providers: [JSONScalar, { provide: APP_GUARD, useClass: GqlThrottlerGuard }],
 })
 export class AppModule {}

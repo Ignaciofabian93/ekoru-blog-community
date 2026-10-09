@@ -40,9 +40,14 @@ export class CreateBlogPostInput {
   @IsInt()
   blogCategoryId: number;
 
-  @Field(() => BlogType, { defaultValue: BlogType.SUSTAINABLE_LIVING })
+  @Field(() => BlogType, {
+    nullable: true,
+    deprecationReason:
+      'Ignored. BlogType is being retired (BLC-9): use blogCategoryId.',
+  })
+  @IsOptional()
   @IsEnum(BlogType)
-  type: BlogType;
+  type?: BlogType;
 
   @Field(() => String, { nullable: true })
   @IsOptional()
@@ -62,7 +67,11 @@ export class UpdateBlogPostInput {
   @IsInt()
   blogCategoryId?: number;
 
-  @Field(() => BlogType, { nullable: true })
+  @Field(() => BlogType, {
+    nullable: true,
+    deprecationReason:
+      'Ignored. BlogType is being retired (BLC-9): use blogCategoryId.',
+  })
   @IsOptional()
   @IsEnum(BlogType)
   type?: BlogType;

@@ -1,6 +1,7 @@
 import { Args, Int, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Logger } from '@nestjs/common';
-import { CurrentSeller } from '../common/decorators';
+import { Throttle } from '@nestjs/throttler';
+import { CurrentLanguage, CurrentSeller } from '../common/decorators';
 import {
   CommunityEventEntity,
   CommunityEventConnectionEntity,
@@ -12,6 +13,7 @@ import {
   UpdateCommunityEventInput,
   PublicCommunityEventsArgs,
   RegisterForCommunityEventInput,
+  CancelCommunityEventArgs,
 } from './dto';
 import { CommunityEventService } from './community-event.service';
 
@@ -42,13 +44,23 @@ export class CommunityEventPublicResolver {
   })
   async communityEvents(
     @Args()
-    { page, pageSize, includePast, authorId }: PublicCommunityEventsArgs,
+    {
+      page,
+      pageSize,
+      includePast,
+      organizerId,
+      authorId,
+      communityCategoryId,
+      communitySubCategoryId,
+    }: PublicCommunityEventsArgs,
   ) {
     return this.eventService.listPublicEvents({
       page,
       pageSize,
       includePast,
-      authorId,
+      organizerId: organizerId ?? authorId,
+      communityCategoryId,
+      communitySubCategoryId,
     });
   }
 
@@ -102,9 +114,28 @@ export class CommunityEventPublicResolver {
     return this.eventService.updateSellerEvent({ sellerId, id, input });
   }
 
+  @Mutation(() => CommunityEventEntity, {
+    name: 'cancelMyCommunityEvent',
+    description:
+      'Cancel an event you organise. Everyone registered is emailed (guests too); members also get an in-app notice.',
+  })
+  async cancelMyCommunityEvent(
+    @Args() { id, reason }: CancelCommunityEventArgs,
+    @CurrentSeller() sellerId: string | undefined,
+    @CurrentLanguage() language: string | undefined,
+  ) {
+    return this.eventService.cancelSellerEvent({
+      sellerId,
+      id,
+      reason,
+      language,
+    });
+  }
+
   @Mutation(() => Boolean, {
     name: 'deleteMyCommunityEvent',
-    description: 'Delete an event you organise. Its reservations go with it.',
+    description:
+      'Delete an event you organise. Refused while it has registrations: cancel it instead.',
   })
   async deleteMyCommunityEvent(
     @Args('id', { type: () => Int }) id: number,
@@ -115,6 +146,8 @@ export class CommunityEventPublicResolver {
 
   // ─── Attending (anyone) ─────────────────────────────────────────────────────
 
+  // Guests can register with any email, so cap it hard per visitor.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Mutation(() => CommunityRegistrationEntity, {
     name: 'registerForCommunityEvent',
     description:
@@ -124,8 +157,9 @@ export class CommunityEventPublicResolver {
   async registerForCommunityEvent(
     @Args('input') input: RegisterForCommunityEventInput,
     @CurrentSeller() sellerId: string | undefined,
+    @CurrentLanguage() language: string | undefined,
   ) {
-    return this.eventService.registerForEvent({ ...input, sellerId });
+    return this.eventService.registerForEvent({ ...input, sellerId, language });
   }
 
   @Mutation(() => Boolean, {

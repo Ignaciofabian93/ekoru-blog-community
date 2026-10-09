@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertAdminCan } from '../common/admin-access';
+import { UsersClient } from '../common/clients/users.client';
 import {
   UnauthorizedError,
   NotFoundError,
@@ -11,38 +14,230 @@ import {
   createPaginatedResponse,
 } from '../common/utils';
 import { CreateCommunityEventInput, UpdateCommunityEventInput } from './dto';
+import {
+  EventLocation,
+  resolveLocation,
+  touchesLocation,
+} from './event-location';
+
+/** Columns needed to apply a partial update over an event. */
+const EDITABLE_SELECT = {
+  id: true,
+  status: true,
+  organizerId: true,
+  startDate: true,
+  endDate: true,
+  locationType: true,
+  address: true,
+  countyId: true,
+  onlineUrl: true,
+} as const;
+
+/** What every event read loads: registrations count and the category of its subcategory. */
+const EVENT_INCLUDE = {
+  _count: { select: { registrations: true } },
+  communitySubCategory: { select: { communityCategoryId: true } },
+} satisfies Prisma.CommunityPostInclude;
 
 type EventRow = Prisma.CommunityPostGetPayload<{
-  include: { _count: { select: { registrations: true } } };
+  include: typeof EVENT_INCLUDE;
 }>;
 
 /**
  * Community Event Service — admin CRUD over community events (the CommunityPost
  * table) and read/management of their registrations.
  *
- * Writes require an authenticated admin; the event's `authorId` is the acting
- * admin. Registrations are written by the web app when users register — this
- * service only lists and removes them, and derives capacity math.
+ * Admin writes require MODERATE_CONTENT; an admin-created event records the
+ * admin in `authorId`. Events a business publishes from the app record the
+ * business in `organizerId` instead. Registrations are written by the web app
+ * when users register — this service lists and removes them, and derives
+ * capacity math.
  */
 @Injectable()
 export class CommunityEventService {
   private readonly logger = new Logger(CommunityEventService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly users: UsersClient,
+    private readonly config: ConfigService,
+  ) {}
 
-  private requireAdmin(adminId?: string): string {
-    if (!adminId) throw new UnauthorizedError('Admin authentication required');
-    return adminId;
+  /** Email language: es, en or fr (other catalog languages fall back to es). */
+  private mailLanguage(language?: string): 'es' | 'en' | 'fr' {
+    const lang = (language ?? 'es').toLowerCase();
+    return lang === 'en' || lang === 'fr' ? lang : 'es';
+  }
+
+  /**
+   * Tells the attendee their place is reserved (email, guests included) and
+   * the organising business that someone registered (in-app + push). Runs
+   * after the reservation is committed and never fails it.
+   */
+  private async notifyRegistration(
+    event: {
+      id: number;
+      title: string;
+      startDate: Date | null;
+      endDate: Date | null;
+      organizerId: string | null;
+      locationType: string;
+      address: string | null;
+      countyId: number | null;
+      onlineUrl: string | null;
+    },
+    registration: { name: string; email: string },
+    language?: string,
+  ) {
+    const lang = this.mailLanguage(language);
+    const [placed] = await this.withPlaces([event]);
+    const place =
+      event.locationType === 'ONLINE'
+        ? null
+        : [event.address, placed.countyName, placed.cityName]
+            .filter(Boolean)
+            .join(', ') || null;
+    const webAppUrl = this.config.get<string>('webAppUrl') ?? '';
+
+    await Promise.all([
+      this.users.sendEventRegistrationEmail({
+        email: registration.email,
+        name: registration.name,
+        language: lang,
+        eventTitle: event.title,
+        startDate: event.startDate,
+        endDate: event.endDate,
+        place,
+        onlineUrl: event.locationType === 'IN_PERSON' ? null : event.onlineUrl,
+        eventUrl: `${webAppUrl}/${lang}/community`,
+      }),
+      event.organizerId
+        ? this.users.notify({
+            sellerId: event.organizerId,
+            type: 'EVENT_REGISTRATION_RECEIVED',
+            relatedId: event.id,
+            actionUrl: '/community',
+            data: {
+              attendeeName: registration.name,
+              eventTitle: event.title,
+            },
+          })
+        : Promise.resolve(false),
+    ]);
+  }
+
+  /** Platform admin with MODERATE_CONTENT (matches the panel's community screens). */
+  private requireAdmin(adminId?: string): Promise<string> {
+    return assertAdminCan(this.prisma, adminId, 'MODERATE_CONTENT');
   }
 
   /** Attaches computed registrationCount + remainingCapacity to a raw row. */
   private mapEvent(row: EventRow) {
+    const { communitySubCategory, ...event } = row;
     const registrationCount = row._count.registrations;
     const remainingCapacity =
       row.capacity == null
         ? null
         : Math.max(0, row.capacity - registrationCount);
-    return { ...row, registrationCount, remainingCapacity };
+    return {
+      ...event,
+      communityCategoryId: communitySubCategory?.communityCategoryId ?? null,
+      registrationCount,
+      remainingCapacity,
+    };
+  }
+
+  /**
+   * The subcategory an event belongs to. Required when creating, cannot be
+   * cleared, and must be active. Undefined when an update leaves it alone.
+   */
+  private async subCategoryFor(
+    value: number | null | undefined,
+    { required }: { required: boolean },
+  ): Promise<number | undefined> {
+    if (value === undefined && !required) return undefined;
+    if (value == null) {
+      throw new BadRequestError('Elige la categoría del evento');
+    }
+    const sub = await this.prisma.communitySubCategory.findUnique({
+      where: { id: value },
+      select: { isActive: true },
+    });
+    if (!sub?.isActive) {
+      throw new BadRequestError('La categoría elegida no existe');
+    }
+    return value;
+  }
+
+  /**
+   * Adds county, city and region names to events in one query. The location
+   * tables belong to ekoru-users, so they are read with raw SQL.
+   */
+  private async withPlaces<T extends { countyId: number | null }>(events: T[]) {
+    const ids = [
+      ...new Set(
+        events.map((e) => e.countyId).filter((v): v is number => v != null),
+      ),
+    ];
+    const places = new Map<
+      number,
+      {
+        county: string;
+        city: string;
+        region: string;
+        cityId: number;
+        regionId: number;
+      }
+    >();
+    if (ids.length) {
+      const rows = await this.prisma.$queryRaw<
+        {
+          id: number;
+          county: string;
+          city: string;
+          region: string;
+          cityId: number;
+          regionId: number;
+        }[]
+      >`
+        SELECT co."id", co."county", ci."city", r."region", co."cityId", ci."regionId"
+        FROM "County" co
+        JOIN "City" ci ON ci."id" = co."cityId"
+        JOIN "Region" r ON r."id" = ci."regionId"
+        WHERE co."id" IN (${Prisma.join(ids)})`;
+      for (const row of rows) places.set(row.id, row);
+    }
+    return events.map((e) => {
+      const place = e.countyId != null ? places.get(e.countyId) : undefined;
+      return {
+        ...e,
+        countyName: place?.county ?? null,
+        cityName: place?.city ?? null,
+        regionName: place?.region ?? null,
+        cityId: place?.cityId ?? null,
+        regionId: place?.regionId ?? null,
+      };
+    });
+  }
+
+  private async withPlace<T extends { countyId: number | null }>(event: T) {
+    const [withPlace] = await this.withPlaces([event]);
+    return withPlace;
+  }
+
+  /** Resolves and checks the location of a create or a location-changing update. */
+  private async locationFor(
+    input: CreateCommunityEventInput | UpdateCommunityEventInput,
+    current?: EventLocation,
+  ): Promise<EventLocation> {
+    const location = resolveLocation(input, current);
+    if (location.countyId != null) {
+      const rows = await this.prisma.$queryRaw<{ id: number }[]>`
+        SELECT "id" FROM "County" WHERE "id" = ${location.countyId} LIMIT 1`;
+      if (!rows.length)
+        throw new BadRequestError('La comuna indicada no existe');
+    }
+    return location;
   }
 
   async getEvents({
@@ -56,7 +251,7 @@ export class CommunityEventService {
     pageSize: number;
     search?: string;
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId);
     const { skip, take } = calculatePrismaParams(page, pageSize);
 
     const where: Prisma.CommunityPostWhereInput = search?.trim()
@@ -70,12 +265,12 @@ export class CommunityEventService {
         orderBy: { id: 'desc' },
         skip,
         take,
-        include: { _count: { select: { registrations: true } } },
+        include: EVENT_INCLUDE,
       }),
     ]);
 
     return createPaginatedResponse(
-      rows.map((r) => this.mapEvent(r)),
+      await this.withPlaces(rows.map((r) => this.mapEvent(r))),
       count,
       page,
       pageSize,
@@ -83,13 +278,13 @@ export class CommunityEventService {
   }
 
   async getEvent({ adminId, id }: { adminId?: string; id: number }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId);
     const event = await this.prisma.communityPost.findUnique({
       where: { id },
-      include: { _count: { select: { registrations: true } } },
+      include: EVENT_INCLUDE,
     });
     if (!event) throw new NotFoundError('Community event not found');
-    return this.mapEvent(event);
+    return this.withPlace(this.mapEvent(event));
   }
 
   async createEvent({
@@ -99,22 +294,82 @@ export class CommunityEventService {
     adminId?: string;
     input: CreateCommunityEventInput;
   }) {
-    const author = this.requireAdmin(adminId);
+    const author = await this.requireAdmin(adminId);
     this.assertDateRange(input.startDate, input.endDate);
+    const communitySubCategoryId = await this.subCategoryFor(
+      input.communitySubCategoryId,
+      { required: true },
+    );
+    const location = await this.locationFor(input);
     try {
       const created = await this.prisma.communityPost.create({
         data: {
           authorId: author,
+          communitySubCategoryId,
           title: input.title,
           content: input.content,
           coverImage: input.coverImage ?? null,
           startDate: input.startDate ?? null,
           endDate: input.endDate ?? null,
           capacity: input.capacity ?? null,
+          ...location,
         },
-        include: { _count: { select: { registrations: true } } },
+        include: EVENT_INCLUDE,
       });
-      return this.mapEvent(created);
+      return this.withPlace(this.mapEvent(created));
+    } catch (error) {
+      throw this.friendlyError(error);
+    }
+  }
+
+  /**
+   * Applies a partial update — shared by the admin and the organiser paths.
+   * Dates and location are validated on their effective values, i.e. after
+   * the update is laid over what is stored.
+   */
+  private async applyUpdate(
+    existing: Prisma.CommunityPostGetPayload<{
+      select: typeof EDITABLE_SELECT;
+    }>,
+    input: UpdateCommunityEventInput,
+  ) {
+    if (existing.status === 'CANCELLED') {
+      throw new BadRequestError('Este evento está cancelado');
+    }
+    const startDate =
+      input.startDate !== undefined ? input.startDate : existing.startDate;
+    const endDate =
+      input.endDate !== undefined ? input.endDate : existing.endDate;
+    this.assertDateRange(startDate, endDate);
+
+    const location = touchesLocation(input)
+      ? await this.locationFor(input, existing)
+      : {};
+    const communitySubCategoryId = await this.subCategoryFor(
+      input.communitySubCategoryId,
+      { required: false },
+    );
+
+    try {
+      const updated = await this.prisma.communityPost.update({
+        where: { id: existing.id },
+        data: {
+          ...(input.title !== undefined && { title: input.title }),
+          ...(input.content !== undefined && { content: input.content }),
+          ...(input.coverImage !== undefined && {
+            coverImage: input.coverImage,
+          }),
+          ...(input.startDate !== undefined && { startDate: input.startDate }),
+          ...(input.endDate !== undefined && { endDate: input.endDate }),
+          ...(input.capacity !== undefined && { capacity: input.capacity }),
+          ...(communitySubCategoryId !== undefined && {
+            communitySubCategoryId,
+          }),
+          ...location,
+        },
+        include: EVENT_INCLUDE,
+      });
+      return this.withPlace(this.mapEvent(updated));
     } catch (error) {
       throw this.friendlyError(error);
     }
@@ -129,43 +384,138 @@ export class CommunityEventService {
     id: number;
     input: UpdateCommunityEventInput;
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId);
     const existing = await this.prisma.communityPost.findUnique({
       where: { id },
-      select: { startDate: true, endDate: true },
+      select: EDITABLE_SELECT,
     });
     if (!existing) throw new NotFoundError('Community event not found');
+    return this.applyUpdate(existing, input);
+  }
 
-    // Validate the effective range after applying the partial update.
-    const startDate =
-      input.startDate !== undefined ? input.startDate : existing.startDate;
-    const endDate =
-      input.endDate !== undefined ? input.endDate : existing.endDate;
-    this.assertDateRange(startDate, endDate);
+  /** Organiser cancels their own event. */
+  async cancelSellerEvent({
+    sellerId,
+    id,
+    reason,
+    language,
+  }: {
+    sellerId?: string;
+    id: number;
+    reason?: string | null;
+    language?: string;
+  }) {
+    await this.loadOwnEvent(id, sellerId);
+    return this.cancel({ id, reason, language });
+  }
 
-    try {
-      const updated = await this.prisma.communityPost.update({
-        where: { id },
-        data: {
-          ...(input.title !== undefined && { title: input.title }),
-          ...(input.content !== undefined && { content: input.content }),
-          ...(input.coverImage !== undefined && {
-            coverImage: input.coverImage,
-          }),
-          ...(input.startDate !== undefined && { startDate: input.startDate }),
-          ...(input.endDate !== undefined && { endDate: input.endDate }),
-          ...(input.capacity !== undefined && { capacity: input.capacity }),
-        },
-        include: { _count: { select: { registrations: true } } },
-      });
-      return this.mapEvent(updated);
-    } catch (error) {
-      throw this.friendlyError(error);
+  /** Admin cancels any event (moderation, or on the organiser's behalf). */
+  async cancelAdminEvent({
+    adminId,
+    id,
+    reason,
+    language,
+  }: {
+    adminId?: string;
+    id: number;
+    reason?: string | null;
+    language?: string;
+  }) {
+    await this.requireAdmin(adminId);
+    return this.cancel({ id, reason, language });
+  }
+
+  /**
+   * Marks the event CANCELLED (idempotent) and tells everyone registered: an
+   * email to each registrant, guests included, and an in-app notice to the
+   * ones with an account. Notifications never fail the cancellation.
+   */
+  private async cancel({
+    id,
+    reason,
+    language,
+  }: {
+    id: number;
+    reason?: string | null;
+    language?: string;
+  }) {
+    const current = await this.prisma.communityPost.findUnique({
+      where: { id },
+      include: EVENT_INCLUDE,
+    });
+    if (!current) throw new NotFoundError('Evento no encontrado');
+    if (current.status === 'CANCELLED') {
+      return this.withPlace(this.mapEvent(current));
     }
+
+    const cancelled = await this.prisma.communityPost.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+        cancelledAt: new Date(),
+        cancellationReason: reason?.trim() || null,
+      },
+      include: EVENT_INCLUDE,
+    });
+
+    void this.notifyCancellation(cancelled, language).catch((err: unknown) =>
+      this.logger.error(
+        `Cancellation notices for event ${id} failed`,
+        err as Error,
+      ),
+    );
+    return this.withPlace(this.mapEvent(cancelled));
+  }
+
+  private async notifyCancellation(
+    event: {
+      id: number;
+      title: string;
+      startDate: Date | null;
+      cancellationReason: string | null;
+    },
+    language?: string,
+  ) {
+    const registrations = await this.prisma.communityPostRegistration.findMany({
+      where: { communityPostId: event.id },
+      select: { name: true, email: true, sellerId: true },
+    });
+    if (!registrations.length) return;
+
+    const lang = this.mailLanguage(language);
+    const webAppUrl = this.config.get<string>('webAppUrl') ?? '';
+    const members = [
+      ...new Set(
+        registrations.map((r) => r.sellerId).filter((v): v is string => !!v),
+      ),
+    ];
+
+    await Promise.all([
+      this.users.sendEventCancelledEmails({
+        language: lang,
+        eventTitle: event.title,
+        startDate: event.startDate,
+        reason: event.cancellationReason,
+        communityUrl: `${webAppUrl}/${lang}/community`,
+        recipients: registrations.map((r) => ({
+          email: r.email,
+          name: r.name,
+        })),
+      }),
+      ...members.map((sellerId) =>
+        this.users.notify({
+          sellerId,
+          type: 'EVENT_CANCELLED',
+          relatedId: event.id,
+          actionUrl: '/community',
+          data: { eventTitle: event.title },
+        }),
+      ),
+    ]);
   }
 
   async deleteEvent({ adminId, id }: { adminId?: string; id: number }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId);
     try {
       // Registrations cascade.
       await this.prisma.communityPost.delete({ where: { id } });
@@ -186,7 +536,7 @@ export class CommunityEventService {
     page: number;
     pageSize: number;
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId);
     const { skip, take } = calculatePrismaParams(page, pageSize);
     const where: Prisma.CommunityPostRegistrationWhereInput = {
       communityPostId: eventId,
@@ -206,7 +556,7 @@ export class CommunityEventService {
   }
 
   async deleteRegistration({ adminId, id }: { adminId?: string; id: number }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId);
     try {
       await this.prisma.communityPostRegistration.delete({ where: { id } });
       return true;
@@ -276,17 +626,27 @@ export class CommunityEventService {
     page,
     pageSize,
     includePast,
-    authorId,
+    organizerId,
+    communityCategoryId,
+    communitySubCategoryId,
   }: {
     page: number;
     pageSize: number;
     includePast?: boolean;
-    authorId?: string;
+    organizerId?: string;
+    communityCategoryId?: number;
+    communitySubCategoryId?: number;
   }) {
     const { skip, take } = calculatePrismaParams(page, pageSize);
 
     const where: Prisma.CommunityPostWhereInput = {
-      ...(authorId ? { authorId } : {}),
+      // Cancelled events leave the public lists; registrants were emailed.
+      status: 'SCHEDULED',
+      ...(organizerId ? { organizerId } : {}),
+      ...(communitySubCategoryId ? { communitySubCategoryId } : {}),
+      ...(communityCategoryId
+        ? { communitySubCategory: { communityCategoryId } }
+        : {}),
       // An event with no date is treated as always-on (a tutorial, say), so it
       // is not filtered out with the past ones.
       ...(includePast
@@ -307,12 +667,12 @@ export class CommunityEventService {
         orderBy: [{ startDate: 'asc' }, { id: 'desc' }],
         skip,
         take,
-        include: { _count: { select: { registrations: true } } },
+        include: EVENT_INCLUDE,
       }),
     ]);
 
     return createPaginatedResponse(
-      rows.map((r) => this.mapEvent(r)),
+      await this.withPlaces(rows.map((r) => this.mapEvent(r))),
       count,
       page,
       pageSize,
@@ -322,10 +682,10 @@ export class CommunityEventService {
   async getPublicEvent(id: number) {
     const event = await this.prisma.communityPost.findUnique({
       where: { id },
-      include: { _count: { select: { registrations: true } } },
+      include: EVENT_INCLUDE,
     });
     if (!event) throw new NotFoundError('Evento no encontrado');
-    return this.mapEvent(event);
+    return this.withPlace(this.mapEvent(event));
   }
 
   async createSellerEvent({
@@ -335,36 +695,46 @@ export class CommunityEventService {
     sellerId?: string;
     input: CreateCommunityEventInput;
   }) {
-    const author = await this.assertBusinessSeller(sellerId);
+    const organizer = await this.assertBusinessSeller(sellerId);
     this.assertDateRange(input.startDate, input.endDate);
+    const communitySubCategoryId = await this.subCategoryFor(
+      input.communitySubCategoryId,
+      { required: true },
+    );
+    const location = await this.locationFor(input);
     try {
       const created = await this.prisma.communityPost.create({
         data: {
-          authorId: author,
+          // The business is the organiser. `authorId` is the Admin foreign
+          // key and stays null; writing the seller id there failed every
+          // app-created event (BLC-10).
+          organizerId: organizer,
+          communitySubCategoryId,
           title: input.title,
           content: input.content,
           coverImage: input.coverImage ?? null,
           startDate: input.startDate ?? null,
           endDate: input.endDate ?? null,
           capacity: input.capacity ?? null,
+          ...location,
         },
-        include: { _count: { select: { registrations: true } } },
+        include: EVENT_INCLUDE,
       });
-      return this.mapEvent(created);
+      return this.withPlace(this.mapEvent(created));
     } catch (error) {
       throw this.friendlyError(error);
     }
   }
 
-  /** Loads an event and confirms the caller authored it. */
+  /** Loads an event and confirms the caller organises it. */
   private async loadOwnEvent(id: number, sellerId?: string) {
-    const author = await this.assertBusinessSeller(sellerId);
+    const organizer = await this.assertBusinessSeller(sellerId);
     const event = await this.prisma.communityPost.findUnique({
       where: { id },
-      select: { id: true, authorId: true },
+      select: EDITABLE_SELECT,
     });
     if (!event) throw new NotFoundError('Evento no encontrado');
-    if (event.authorId !== author) {
+    if (event.organizerId !== organizer) {
       throw new UnauthorizedError(
         'Solo el organizador puede editar este evento',
       );
@@ -381,31 +751,22 @@ export class CommunityEventService {
     id: number;
     input: UpdateCommunityEventInput;
   }) {
-    await this.loadOwnEvent(id, sellerId);
-    this.assertDateRange(input.startDate, input.endDate);
-    try {
-      const updated = await this.prisma.communityPost.update({
-        where: { id },
-        data: {
-          ...(input.title !== undefined && { title: input.title }),
-          ...(input.content !== undefined && { content: input.content }),
-          ...(input.coverImage !== undefined && {
-            coverImage: input.coverImage,
-          }),
-          ...(input.startDate !== undefined && { startDate: input.startDate }),
-          ...(input.endDate !== undefined && { endDate: input.endDate }),
-          ...(input.capacity !== undefined && { capacity: input.capacity }),
-        },
-        include: { _count: { select: { registrations: true } } },
-      });
-      return this.mapEvent(updated);
-    } catch (error) {
-      throw this.friendlyError(error);
-    }
+    const existing = await this.loadOwnEvent(id, sellerId);
+    return this.applyUpdate(existing, input);
   }
 
   async deleteSellerEvent({ sellerId, id }: { sellerId?: string; id: number }) {
     await this.loadOwnEvent(id, sellerId);
+    // Deleting would silently drop people who reserved a place; cancelling
+    // keeps the record and tells them.
+    const registrations = await this.prisma.communityPostRegistration.count({
+      where: { communityPostId: id },
+    });
+    if (registrations > 0) {
+      throw new BadRequestError(
+        'Este evento tiene inscritos: cancélalo para avisarles en vez de borrarlo',
+      );
+    }
     await this.prisma.communityPost.delete({ where: { id } });
     return true;
   }
@@ -422,21 +783,47 @@ export class CommunityEventService {
     name,
     email,
     sellerId,
+    language,
   }: {
     eventId: number;
     name: string;
     email: string;
     sellerId?: string;
+    language?: string;
   }) {
     const normalizedEmail = email.trim().toLowerCase();
 
+    let event: Parameters<CommunityEventService['notifyRegistration']>[0];
+    let registration: Awaited<
+      ReturnType<PrismaService['communityPostRegistration']['create']>
+    >;
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      ({ event, registration } = await this.prisma.$transaction(async (tx) => {
+        // Lock the event row so concurrent reservations queue up. Under the
+        // default READ COMMITTED isolation two transactions could otherwise
+        // both count capacity - 1 and both take the last place.
+        await tx.$queryRaw`SELECT "id" FROM "CommunityPost" WHERE "id" = ${eventId} FOR UPDATE`;
+
         const event = await tx.communityPost.findUnique({
           where: { id: eventId },
-          select: { id: true, capacity: true, startDate: true, endDate: true },
+          select: {
+            id: true,
+            title: true,
+            capacity: true,
+            startDate: true,
+            endDate: true,
+            organizerId: true,
+            status: true,
+            locationType: true,
+            address: true,
+            countyId: true,
+            onlineUrl: true,
+          },
         });
         if (!event) throw new NotFoundError('Evento no encontrado');
+        if (event.status === 'CANCELLED') {
+          throw new BadRequestError('Este evento fue cancelado');
+        }
 
         const closesAt = event.endDate ?? event.startDate;
         if (closesAt && closesAt.getTime() < Date.now()) {
@@ -452,7 +839,7 @@ export class CommunityEventService {
           }
         }
 
-        return tx.communityPostRegistration.create({
+        const registration = await tx.communityPostRegistration.create({
           data: {
             communityPostId: eventId,
             name: name.trim(),
@@ -460,10 +847,21 @@ export class CommunityEventService {
             sellerId: sellerId ?? null,
           },
         });
-      });
+        return { event, registration };
+      }));
     } catch (error) {
       throw this.friendlyError(error);
     }
+
+    // Fire and forget: the place is reserved whatever happens to the email.
+    void this.notifyRegistration(event, registration, language).catch(
+      (err: unknown) =>
+        this.logger.error(
+          `Registration notifications for event ${event.id} failed`,
+          err as Error,
+        ),
+    );
+    return registration;
   }
 
   /** The signed-in attendee's own reservations. */
@@ -506,7 +904,13 @@ export class CommunityEventService {
     const registration = await this.prisma.communityPostRegistration.findUnique(
       {
         where: { id },
-        select: { sellerId: true },
+        select: {
+          sellerId: true,
+          name: true,
+          communityPost: {
+            select: { id: true, title: true, organizerId: true },
+          },
+        },
       },
     );
     if (!registration) return false;
@@ -515,6 +919,24 @@ export class CommunityEventService {
     }
 
     await this.prisma.communityPostRegistration.delete({ where: { id } });
+
+    const event = registration.communityPost;
+    if (event.organizerId) {
+      void this.users
+        .notify({
+          sellerId: event.organizerId,
+          type: 'EVENT_REGISTRATION_CANCELLED',
+          relatedId: event.id,
+          actionUrl: '/community',
+          data: { attendeeName: registration.name, eventTitle: event.title },
+        })
+        .catch((err: unknown) =>
+          this.logger.error(
+            `Cancellation notice for event ${event.id} failed`,
+            err as Error,
+          ),
+        );
+    }
     return true;
   }
 }

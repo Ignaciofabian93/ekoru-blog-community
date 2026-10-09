@@ -3,6 +3,7 @@ export {
   CommunityRegistrationsArgs,
   CreateCommunityEventInput,
   UpdateCommunityEventInput,
+  CancelCommunityEventArgs,
 } from './community-event.input';
 export {
   PublicCommunityEventsArgs,

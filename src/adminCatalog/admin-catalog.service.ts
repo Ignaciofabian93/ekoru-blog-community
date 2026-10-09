@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { UnauthorizedError, BadRequestError } from '../common/exceptions';
+import { assertAdminCan, AdminPermissionName } from '../common/admin-access';
+import { BadRequestError } from '../common/exceptions';
 import {
   calculatePrismaParams,
   createPaginatedResponse,
@@ -56,7 +57,7 @@ export class AdminCatalogService {
     pageSize: number;
     search?: string;
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'WRITE_BLOG');
     const { skip, take } = calculatePrismaParams(page, pageSize);
 
     const where: Prisma.BlogCategoryWhereInput = {
@@ -95,7 +96,7 @@ export class AdminCatalogService {
     pageSize: number;
     search?: string;
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'MODERATE_CONTENT');
     const { skip, take } = calculatePrismaParams(page, pageSize);
 
     const where: Prisma.CommunityCategoryWhereInput = {
@@ -136,7 +137,7 @@ export class AdminCatalogService {
     search?: string;
     communityCategoryId?: number;
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'MODERATE_CONTENT');
     const { skip, take } = calculatePrismaParams(page, pageSize);
 
     const where: Prisma.CommunitySubCategoryWhereInput = {
@@ -174,7 +175,7 @@ export class AdminCatalogService {
     adminId?: string;
     rows: BlogCategoryUpsertRowInput[];
   }): Promise<BulkResult> {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'WRITE_BLOG');
 
     return this.processRows(rows, async (row) => {
       const data = this.pickDefined({
@@ -205,7 +206,7 @@ export class AdminCatalogService {
     adminId?: string;
     rows: BlogCategoryTranslationUpsertRowInput[];
   }): Promise<BulkResult> {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'WRITE_BLOG');
 
     return this.processRows(rows, async (row) => {
       const data = this.pickDefined({
@@ -275,7 +276,7 @@ export class AdminCatalogService {
     adminId?: string;
     rows: CommunityCategoryUpsertRowInput[];
   }): Promise<BulkResult> {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'MODERATE_CONTENT');
 
     return this.processRows(rows, async (row) => {
       const data = this.pickDefined({
@@ -305,7 +306,7 @@ export class AdminCatalogService {
     adminId?: string;
     rows: CommunityCategoryTranslationUpsertRowInput[];
   }): Promise<BulkResult> {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'MODERATE_CONTENT');
 
     return this.processRows(rows, async (row) => {
       const data = this.pickDefined({
@@ -378,7 +379,7 @@ export class AdminCatalogService {
     adminId?: string;
     rows: CommunitySubCategoryUpsertRowInput[];
   }): Promise<BulkResult> {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'MODERATE_CONTENT');
 
     return this.processRows(rows, async (row) => {
       const data = this.pickDefined({
@@ -417,7 +418,7 @@ export class AdminCatalogService {
     adminId?: string;
     rows: CommunitySubCategoryTranslationUpsertRowInput[];
   }): Promise<BulkResult> {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'MODERATE_CONTENT');
 
     return this.processRows(rows, async (row) => {
       const data = this.pickDefined({
@@ -487,7 +488,7 @@ export class AdminCatalogService {
   // ─── Deletes ────────────────────────────────────────────────────────────────
 
   async deleteBlogCategory({ adminId, id }: { adminId?: string; id: number }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'WRITE_BLOG');
     try {
       // Translations cascade; blog posts referencing this category restrict.
       await this.prisma.blogCategory.delete({ where: { id } });
@@ -504,7 +505,7 @@ export class AdminCatalogService {
     adminId?: string;
     id: number;
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'WRITE_BLOG');
     try {
       await this.prisma.blogCategoryTranslation.delete({ where: { id } });
       return true;
@@ -520,7 +521,7 @@ export class AdminCatalogService {
     adminId?: string;
     id: number;
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'MODERATE_CONTENT');
     try {
       // Translations cascade; sub categories restrict.
       await this.prisma.communityCategory.delete({ where: { id } });
@@ -537,7 +538,7 @@ export class AdminCatalogService {
     adminId?: string;
     id: number;
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'MODERATE_CONTENT');
     try {
       await this.prisma.communityCategoryTranslation.delete({ where: { id } });
       return true;
@@ -553,7 +554,7 @@ export class AdminCatalogService {
     adminId?: string;
     id: number;
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'MODERATE_CONTENT');
     try {
       await this.prisma.communitySubCategory.delete({ where: { id } });
       return true;
@@ -569,7 +570,7 @@ export class AdminCatalogService {
     adminId?: string;
     id: number;
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId, 'MODERATE_CONTENT');
     try {
       await this.prisma.communitySubCategoryTranslation.delete({
         where: { id },
@@ -582,10 +583,12 @@ export class AdminCatalogService {
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
-  private requireAdmin(adminId?: string): void {
-    if (!adminId) {
-      throw new UnauthorizedError('Admin authentication required');
-    }
+  /** Platform admin with `permission` (blog: WRITE_BLOG, community: MODERATE_CONTENT). */
+  private requireAdmin(
+    adminId: string | undefined,
+    permission: AdminPermissionName,
+  ): Promise<string> {
+    return assertAdminCan(this.prisma, adminId, permission);
   }
 
   /** Throws when any of the listed fields is missing on a create row. */

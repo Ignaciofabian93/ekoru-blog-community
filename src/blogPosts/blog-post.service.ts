@@ -1,11 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  UnauthorizedError,
-  NotFoundError,
-  BadRequestError,
-} from '../common/exceptions';
+import { assertAdminCan } from '../common/admin-access';
+import { NotFoundError, BadRequestError } from '../common/exceptions';
 import {
   calculatePrismaParams,
   createPaginatedResponse,
@@ -29,9 +26,9 @@ export class BlogPostService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  private requireAdmin(adminId?: string): string {
-    if (!adminId) throw new UnauthorizedError('Admin authentication required');
-    return adminId;
+  /** Platform admin with WRITE_BLOG (matches the panel's blog screens). */
+  private requireAdmin(adminId?: string): Promise<string> {
+    return assertAdminCan(this.prisma, adminId, 'WRITE_BLOG');
   }
 
   async getBlogPosts({
@@ -45,7 +42,7 @@ export class BlogPostService {
     pageSize: number;
     search?: string;
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId);
     const { skip, take } = calculatePrismaParams(page, pageSize);
 
     const where: Prisma.BlogPostWhereInput = search?.trim()
@@ -71,7 +68,7 @@ export class BlogPostService {
   }
 
   async getBlogPost({ adminId, id }: { adminId?: string; id: number }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId);
     const post = await this.prisma.blogPost.findUnique({
       where: { id },
       include: { translations: { orderBy: { language: 'asc' } } },
@@ -87,13 +84,12 @@ export class BlogPostService {
     adminId?: string;
     input: CreateBlogPostInput;
   }) {
-    const author = this.requireAdmin(adminId);
+    const author = await this.requireAdmin(adminId);
     try {
       return await this.prisma.blogPost.create({
         data: {
           authorId: author,
           blogCategoryId: input.blogCategoryId,
-          type: input.type,
           coverImage: input.coverImage ?? null,
           isPublished: input.isPublished ?? false,
           publishedAt: input.isPublished ? new Date() : null,
@@ -114,7 +110,7 @@ export class BlogPostService {
     id: number;
     input: UpdateBlogPostInput;
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId);
     const existing = await this.prisma.blogPost.findUnique({
       where: { id },
       select: { id: true, isPublished: true },
@@ -134,7 +130,6 @@ export class BlogPostService {
           ...(input.blogCategoryId !== undefined && {
             blogCategoryId: input.blogCategoryId,
           }),
-          ...(input.type !== undefined && { type: input.type }),
           ...(input.coverImage !== undefined && {
             coverImage: input.coverImage,
           }),
@@ -151,7 +146,7 @@ export class BlogPostService {
   }
 
   async deleteBlogPost({ adminId, id }: { adminId?: string; id: number }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId);
     try {
       // Translations and reactions cascade.
       await this.prisma.blogPost.delete({ where: { id } });
@@ -168,7 +163,7 @@ export class BlogPostService {
     adminId?: string;
     input: UpsertBlogPostTranslationInput;
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId);
     const post = await this.prisma.blogPost.findUnique({
       where: { id: input.blogPostId },
       select: { id: true },
@@ -214,7 +209,7 @@ export class BlogPostService {
     blogPostId: number;
     language: UpsertBlogPostTranslationInput['language'];
   }) {
-    this.requireAdmin(adminId);
+    await this.requireAdmin(adminId);
     try {
       await this.prisma.blogPostTranslation.delete({
         where: { blogPostId_language: { blogPostId, language } },

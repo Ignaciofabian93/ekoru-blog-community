@@ -16,3 +16,12 @@ export const CurrentAdmin = createParamDecorator(
     return gqlContext.adminId;
   },
 );
+
+/** Request language from Accept-Language (e.g. 'ES'), resolved in the context factory. */
+export const CurrentLanguage = createParamDecorator(
+  (data: unknown, context: ExecutionContext): string | undefined => {
+    const ctx = GqlExecutionContext.create(context);
+    const gqlContext = ctx.getContext<{ language?: string }>();
+    return gqlContext.language;
+  },
+);
