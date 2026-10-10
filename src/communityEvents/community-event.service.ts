@@ -21,6 +21,20 @@ import {
 } from './event-location';
 
 /** Columns needed to apply a partial update over an event. */
+/**
+ * Attendance can be confirmed from the event's start until this long after it
+ * ends (or after its start, for a single-date event).
+ */
+export const ATTENDANCE_WINDOW_DAYS = 30;
+
+/**
+ * An organiser earns ORGANIZEEVENT points for each attendee with an account,
+ * up to this many per event, so a host cannot inflate points with a list.
+ */
+export const ORGANIZER_POINTS_ATTENDEE_CAP = 40;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 const EDITABLE_SELECT = {
   id: true,
   status: true,
@@ -727,6 +741,163 @@ export class CommunityEventService {
   }
 
   /** Loads an event and confirms the caller organises it. */
+  // ─── Attendance (points) ───────────────────────────────────────────────────
+
+  /** Everyone registered for an event the caller organises. */
+  async listOwnEventAttendees({
+    sellerId,
+    id,
+  }: {
+    sellerId?: string;
+    id: number;
+  }) {
+    await this.loadOwnEvent(id, sellerId);
+    const rows = await this.prisma.communityPostRegistration.findMany({
+      where: { communityPostId: id },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        sellerId: true,
+        attendedAt: true,
+        createdAt: true,
+      },
+    });
+    return rows.map(({ sellerId: account, ...row }) => ({
+      ...row,
+      hasAccount: !!account,
+    }));
+  }
+
+  /**
+   * The organiser confirms (or clears) that a registered person came.
+   *
+   * Confirming earns points once per registration (ekoru-users
+   * docs/POINTS.md): ATTENDTOEVENT for the attendee and ORGANIZEEVENT for the
+   * organiser, both only when the attendee registered with an Ekoru account
+   * that is not the organiser's, and the organiser's only for the first
+   * `ORGANIZER_POINTS_ATTENDEE_CAP` such attendees. Clearing the mark does
+   * not take points back. Allowed from the event's start until
+   * `ATTENDANCE_WINDOW_DAYS` after it, never on a cancelled event.
+   */
+  async setAttendance({
+    sellerId,
+    registrationId,
+    attended,
+    now = new Date(),
+  }: {
+    sellerId?: string;
+    registrationId: number;
+    attended: boolean;
+    now?: Date;
+  }) {
+    const registration = await this.prisma.communityPostRegistration.findUnique(
+      {
+        where: { id: registrationId },
+        select: { id: true, communityPostId: true, sellerId: true },
+      },
+    );
+    if (!registration) throw new NotFoundError('Inscripción no encontrada');
+
+    const event = await this.loadOwnEvent(
+      registration.communityPostId,
+      sellerId,
+    );
+    if (event.status === 'CANCELLED') {
+      throw new BadRequestError('El evento fue cancelado');
+    }
+    if (event.startDate && event.startDate > now) {
+      throw new BadRequestError(
+        'La asistencia se confirma desde que comienza el evento',
+      );
+    }
+    const last = event.endDate ?? event.startDate;
+    if (
+      last &&
+      now.getTime() > last.getTime() + ATTENDANCE_WINDOW_DAYS * DAY_MS
+    ) {
+      throw new BadRequestError(
+        `La asistencia se confirma hasta ${ATTENDANCE_WINDOW_DAYS} días después del evento`,
+      );
+    }
+
+    // Only the first confirmation stamps the time; clearing sets null.
+    const updated = await this.prisma.communityPostRegistration.update({
+      where: { id: registrationId },
+      data: attended
+        ? { attendedAt: (await this.attendedAt(registrationId)) ?? now }
+        : { attendedAt: null },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        sellerId: true,
+        attendedAt: true,
+        createdAt: true,
+      },
+    });
+
+    if (attended) {
+      void this.awardAttendancePoints({
+        eventId: event.id,
+        organizerId: event.organizerId,
+        registration: updated,
+      });
+    }
+
+    const { sellerId: account, ...row } = updated;
+    return { ...row, hasAccount: !!account };
+  }
+
+  private async attendedAt(registrationId: number): Promise<Date | null> {
+    const row = await this.prisma.communityPostRegistration.findUnique({
+      where: { id: registrationId },
+      select: { attendedAt: true },
+    });
+    return row?.attendedAt ?? null;
+  }
+
+  private async awardAttendancePoints({
+    eventId,
+    organizerId,
+    registration,
+  }: {
+    eventId: number;
+    organizerId: string | null;
+    registration: { id: number; sellerId: string | null };
+  }): Promise<void> {
+    const attendee = registration.sellerId;
+    if (!attendee || attendee === organizerId) return;
+    try {
+      await this.users.awardActivityPoints({
+        sellerId: attendee,
+        kind: 'ATTENDTOEVENT',
+        reference: `event-registration:${registration.id}`,
+      });
+      if (!organizerId) return;
+      const confirmed = await this.prisma.communityPostRegistration.count({
+        where: {
+          communityPostId: eventId,
+          attendedAt: { not: null },
+          sellerId: { not: null },
+          NOT: { sellerId: organizerId },
+        },
+      });
+      if (confirmed > ORGANIZER_POINTS_ATTENDEE_CAP) return;
+      await this.users.awardActivityPoints({
+        sellerId: organizerId,
+        kind: 'ORGANIZEEVENT',
+        reference: `event-attendee:${registration.id}`,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Attendance points failed for registration ${registration.id}`,
+        error,
+      );
+    }
+  }
+
   private async loadOwnEvent(id: number, sellerId?: string) {
     const organizer = await this.assertBusinessSeller(sellerId);
     const event = await this.prisma.communityPost.findUnique({

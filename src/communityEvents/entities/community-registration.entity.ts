@@ -21,6 +21,12 @@ export class CommunityRegistrationEntity {
   })
   sellerId?: string | null;
 
+  @Field(() => Date, {
+    nullable: true,
+    description: 'When the organiser confirmed the person came.',
+  })
+  attendedAt?: Date | null;
+
   @Field(() => Date)
   createdAt: Date;
 }

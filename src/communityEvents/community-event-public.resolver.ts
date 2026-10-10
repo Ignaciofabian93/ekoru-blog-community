@@ -7,6 +7,7 @@ import {
   CommunityEventConnectionEntity,
   CommunityRegistrationEntity,
   CommunityRegistrationConnectionEntity,
+  EventAttendeeEntity,
 } from './entities';
 import {
   CreateCommunityEventInput,
@@ -112,6 +113,36 @@ export class CommunityEventPublicResolver {
     @CurrentSeller() sellerId: string | undefined,
   ) {
     return this.eventService.updateSellerEvent({ sellerId, id, input });
+  }
+
+  @Query(() => [EventAttendeeEntity], {
+    name: 'myEventAttendees',
+    description:
+      'Everyone registered for an event you organise, to confirm who came.',
+  })
+  async myEventAttendees(
+    @Args('eventId', { type: () => Int }) eventId: number,
+    @CurrentSeller() sellerId: string | undefined,
+  ) {
+    return this.eventService.listOwnEventAttendees({ sellerId, id: eventId });
+  }
+
+  @Mutation(() => EventAttendeeEntity, {
+    name: 'setEventAttendance',
+    description:
+      'Confirm (or clear) that a registered person came to your event. ' +
+      'Confirming earns eco-points for them and for you, once.',
+  })
+  async setEventAttendance(
+    @Args('registrationId', { type: () => Int }) registrationId: number,
+    @Args('attended', { type: () => Boolean }) attended: boolean,
+    @CurrentSeller() sellerId: string | undefined,
+  ) {
+    return this.eventService.setAttendance({
+      sellerId,
+      registrationId,
+      attended,
+    });
   }
 
   @Mutation(() => CommunityEventEntity, {

@@ -120,6 +120,36 @@ export class UsersClient {
     return result?.sendEventCancelledEmails ?? 0;
   }
 
+  /**
+   * A completed activity earns points through the users points engine
+   * (ekoru-users docs/POINTS.md). Idempotent per seller + reference.
+   * Best-effort: returns the points credited, 0 on any failure.
+   */
+  async awardActivityPoints(input: {
+    sellerId: string;
+    kind: 'ATTENDTOEVENT' | 'ORGANIZEEVENT';
+    reference: string;
+  }): Promise<number> {
+    const result = await this.call<{ awardActivityPoints: number }>(
+      `points for ${input.reference}`,
+      /* GraphQL */ `
+        mutation AwardActivityPoints(
+          $sellerId: ID!
+          $kind: TransactionKind!
+          $reference: String!
+        ) {
+          awardActivityPoints(
+            sellerId: $sellerId
+            kind: $kind
+            reference: $reference
+          )
+        }
+      `,
+      input,
+    );
+    return result?.awardActivityPoints ?? 0;
+  }
+
   private async call<T>(
     label: string,
     query: string,

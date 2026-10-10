@@ -203,6 +203,8 @@ model CommunityPostRegistration {
   email           String
   // Optional ekoru profile id, filled in-app when a logged-in user registers.
   sellerId        String?
+  // Set when the organiser confirms the person came; earns attendance points.
+  attendedAt      DateTime?
   createdAt       DateTime      @default(now())
   communityPost   CommunityPost @relation(fields: [communityPostId], references: [id], onDelete: Cascade)
 
