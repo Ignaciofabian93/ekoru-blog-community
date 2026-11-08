@@ -29,25 +29,47 @@ export class BlogPostPublicService {
     page: number;
     pageSize: number;
   }) {
+    return this.getPosts({ categorySlug, language, page, pageSize });
+  }
+
+  /**
+   * Published posts, newest first, across every category or, with
+   * `categorySlug`, in one category. Backs the post list on /blog.
+   */
+  async getPosts({
+    categorySlug,
+    language,
+    page,
+    pageSize,
+  }: {
+    categorySlug?: string;
+    language: Language;
+    page: number;
+    pageSize: number;
+  }) {
     this.logger.debug(
-      `getPostsByCategory - slug: ${categorySlug}, language: ${language}`,
+      `getPosts - slug: ${categorySlug ?? '(all)'}, language: ${language}`,
     );
 
     // Resolve the category from its translated slug; a miss yields an empty page
     // rather than an error so the client can render its own empty state.
-    const categoryTranslation =
-      await this.prisma.blogCategoryTranslation.findFirst({
-        where: { slug: categorySlug, language },
-        select: { blogCategoryId: true },
-      });
-    if (!categoryTranslation) {
-      return createPaginatedResponse<BlogPostEntity>([], 0, page, pageSize);
+    let blogCategoryId: number | undefined;
+    if (categorySlug) {
+      const categoryTranslation =
+        await this.prisma.blogCategoryTranslation.findFirst({
+          where: { slug: categorySlug, language },
+          select: { blogCategoryId: true },
+        });
+      if (!categoryTranslation) {
+        return createPaginatedResponse<BlogPostEntity>([], 0, page, pageSize);
+      }
+      blogCategoryId = categoryTranslation.blogCategoryId;
     }
 
     const { skip, take } = calculatePrismaParams(page, pageSize);
     const where: Prisma.BlogPostWhereInput = {
       isPublished: true,
-      blogCategoryId: categoryTranslation.blogCategoryId,
+      ...(blogCategoryId !== undefined && { blogCategoryId }),
       translations: { some: { language } },
     };
 

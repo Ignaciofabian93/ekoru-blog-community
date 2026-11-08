@@ -42,6 +42,31 @@ export class BlogPostPublicResolver {
     });
   }
 
+  @Query(() => BlogPostConnectionEntity, {
+    name: 'getBlogPosts',
+    description:
+      'Published blog posts, newest first, across every category or, with ' +
+      'categorySlug (translated slug), in one category. For the post list on /blog.',
+  })
+  async getBlogPosts(
+    @Args('language', { type: () => Language }) language: Language,
+    @Args('categorySlug', { type: () => String, nullable: true })
+    categorySlug?: string,
+    @Args('page', { type: () => Int, defaultValue: 1 }) page: number = 1,
+    @Args('pageSize', { type: () => Int, defaultValue: 12 })
+    pageSize: number = 12,
+  ) {
+    this.logger.debug(
+      `Query: getBlogPosts - slug: ${categorySlug ?? '(all)'}, language: ${language}`,
+    );
+    return this.blogPostPublicService.getPosts({
+      categorySlug: categorySlug || undefined,
+      language,
+      page,
+      pageSize,
+    });
+  }
+
   @Query(() => BlogPostEntity, {
     name: 'getBlogPostBySlug',
     nullable: true,
