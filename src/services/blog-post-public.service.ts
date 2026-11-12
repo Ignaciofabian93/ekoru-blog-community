@@ -68,9 +68,8 @@ export class BlogPostPublicService {
 
     const { skip, take } = calculatePrismaParams(page, pageSize);
     const where: Prisma.BlogPostWhereInput = {
-      isPublished: true,
+      ...this.publishedWhere(language),
       ...(blogCategoryId !== undefined && { blogCategoryId }),
-      translations: { some: { language } },
     };
 
     const [count, rows] = await Promise.all([
@@ -86,6 +85,32 @@ export class BlogPostPublicService {
 
     const nodes = rows.map((row) => this.toPublic(row));
     return createPaginatedResponse(nodes, count, page, pageSize);
+  }
+
+  /**
+   * Published posts per category, counted over exactly the posts `getPosts`
+   * lists. Backs the category tiles on /blog; empty categories are omitted.
+   */
+  async getPostCountsByCategory(
+    language: Language,
+  ): Promise<{ blogCategoryId: number; count: number }[]> {
+    this.logger.debug(`getPostCountsByCategory - language: ${language}`);
+
+    const groups = await this.prisma.blogPost.groupBy({
+      by: ['blogCategoryId'],
+      where: this.publishedWhere(language),
+      _count: { _all: true },
+    });
+
+    return groups.map((group) => ({
+      blogCategoryId: group.blogCategoryId,
+      count: group._count._all,
+    }));
+  }
+
+  /** A post is public once published and translated into the language. */
+  private publishedWhere(language: Language): Prisma.BlogPostWhereInput {
+    return { isPublished: true, translations: { some: { language } } };
   }
 
   async getPostBySlug({

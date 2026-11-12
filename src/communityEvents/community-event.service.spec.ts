@@ -294,6 +294,59 @@ describe('CommunityEventService (organiser and location)', () => {
     ).rejects.toThrow(/Elige la categoría/);
   });
 
+  it('counts upcoming events per category, summing their subcategories', async () => {
+    const prisma = makePrisma();
+    const groupBy = jest.fn(() =>
+      Promise.resolve([
+        { communitySubCategoryId: 5, _count: { _all: 2 } },
+        { communitySubCategoryId: 6, _count: { _all: 1 } },
+        { communitySubCategoryId: 9, _count: { _all: 4 } },
+      ]),
+    );
+    const findSubs = jest.fn(() =>
+      Promise.resolve([
+        { id: 5, communityCategoryId: 2 },
+        { id: 6, communityCategoryId: 2 },
+        { id: 9, communityCategoryId: 3 },
+      ]),
+    );
+    Object.assign(prisma.communityPost, { groupBy });
+    Object.assign(prisma.communitySubCategory, { findMany: findSubs });
+
+    await service(prisma).listPublicEvents({ page: 1, pageSize: 12 });
+    const counts = await service(prisma).countPublicEventsByCategory();
+
+    // Same filter as the default public list, minus events with no subcategory.
+    const [{ where: listWhere }] = prisma.communityPost.findMany.mock
+      .calls[0] as unknown as [{ where: Record<string, unknown> }];
+    const [[{ where }]] = groupBy.mock.calls as unknown as [
+      [{ where: Record<string, unknown> }],
+    ];
+    expect(where).toMatchObject({
+      status: listWhere.status,
+      communitySubCategoryId: { not: null },
+    });
+    expect(where.OR).toHaveLength(3);
+    expect(counts).toEqual([
+      { communityCategoryId: 2, count: 3 },
+      { communityCategoryId: 3, count: 4 },
+    ]);
+  });
+
+  it('counts nothing without querying subcategories when there are no events', async () => {
+    const prisma = makePrisma();
+    const findSubs = jest.fn();
+    Object.assign(prisma.communityPost, {
+      groupBy: jest.fn(() => Promise.resolve([])),
+    });
+    Object.assign(prisma.communitySubCategory, { findMany: findSubs });
+
+    await expect(
+      service(prisma).countPublicEventsByCategory(),
+    ).resolves.toEqual([]);
+    expect(findSubs).not.toHaveBeenCalled();
+  });
+
   it('filters the public list by category through the subcategory', async () => {
     const prisma = makePrisma();
     await service(prisma).listPublicEvents({

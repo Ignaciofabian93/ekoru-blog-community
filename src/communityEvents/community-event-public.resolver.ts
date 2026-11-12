@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentLanguage, CurrentSeller } from '../common/decorators';
 import {
+  CommunityCategoryEventCountEntity,
   CommunityEventEntity,
   CommunityEventConnectionEntity,
   CommunityRegistrationEntity,
@@ -63,6 +64,17 @@ export class CommunityEventPublicResolver {
       communityCategoryId,
       communitySubCategoryId,
     });
+  }
+
+  @Query(() => [CommunityCategoryEventCountEntity], {
+    name: 'communityEventCountsByCategory',
+    description:
+      'Upcoming public events per community category (the events ' +
+      'communityEvents lists by default). Categories without events are ' +
+      'omitted. Public.',
+  })
+  async communityEventCountsByCategory() {
+    return this.eventService.countPublicEventsByCategory();
   }
 
   @Query(() => CommunityEventEntity, {

@@ -653,26 +653,12 @@ export class CommunityEventService {
   }) {
     const { skip, take } = calculatePrismaParams(page, pageSize);
 
-    const where: Prisma.CommunityPostWhereInput = {
-      // Cancelled events leave the public lists; registrants were emailed.
-      status: 'SCHEDULED',
-      ...(organizerId ? { organizerId } : {}),
-      ...(communitySubCategoryId ? { communitySubCategoryId } : {}),
-      ...(communityCategoryId
-        ? { communitySubCategory: { communityCategoryId } }
-        : {}),
-      // An event with no date is treated as always-on (a tutorial, say), so it
-      // is not filtered out with the past ones.
-      ...(includePast
-        ? {}
-        : {
-            OR: [
-              { startDate: null },
-              { startDate: { gte: new Date() } },
-              { endDate: { gte: new Date() } },
-            ],
-          }),
-    };
+    const where = this.publicEventsWhere({
+      includePast,
+      organizerId,
+      communityCategoryId,
+      communitySubCategoryId,
+    });
 
     const [count, rows] = await Promise.all([
       this.prisma.communityPost.count({ where }),
@@ -691,6 +677,82 @@ export class CommunityEventService {
       page,
       pageSize,
     );
+  }
+
+  /**
+   * Upcoming public events per community category, counted over exactly the
+   * events `listPublicEvents` shows by default. Events reach a category
+   * through their subcategory, so they are grouped by subcategory and summed.
+   * Categories without events are omitted.
+   */
+  async countPublicEventsByCategory(): Promise<
+    { communityCategoryId: number; count: number }[]
+  > {
+    const groups = await this.prisma.communityPost.groupBy({
+      by: ['communitySubCategoryId'],
+      where: {
+        ...this.publicEventsWhere({}),
+        communitySubCategoryId: { not: null },
+      },
+      _count: { _all: true },
+    });
+    if (!groups.length) return [];
+
+    const subcategories = await this.prisma.communitySubCategory.findMany({
+      where: {
+        id: { in: groups.map((g) => g.communitySubCategoryId as number) },
+      },
+      select: { id: true, communityCategoryId: true },
+    });
+    const categoryOf = new Map(
+      subcategories.map((s) => [s.id, s.communityCategoryId]),
+    );
+
+    const totals = new Map<number, number>();
+    for (const group of groups) {
+      const categoryId = categoryOf.get(group.communitySubCategoryId as number);
+      if (categoryId === undefined) continue;
+      totals.set(categoryId, (totals.get(categoryId) ?? 0) + group._count._all);
+    }
+    return [...totals].map(([communityCategoryId, count]) => ({
+      communityCategoryId,
+      count,
+    }));
+  }
+
+  /** The filter behind every public event read (lists and counts). */
+  private publicEventsWhere({
+    includePast,
+    organizerId,
+    communityCategoryId,
+    communitySubCategoryId,
+  }: {
+    includePast?: boolean;
+    organizerId?: string;
+    communityCategoryId?: number;
+    communitySubCategoryId?: number;
+  }): Prisma.CommunityPostWhereInput {
+    const now = new Date();
+    return {
+      // Cancelled events leave the public lists; registrants were emailed.
+      status: 'SCHEDULED',
+      ...(organizerId ? { organizerId } : {}),
+      ...(communitySubCategoryId ? { communitySubCategoryId } : {}),
+      ...(communityCategoryId
+        ? { communitySubCategory: { communityCategoryId } }
+        : {}),
+      // An event with no date is treated as always-on (a tutorial, say), so it
+      // is not filtered out with the past ones.
+      ...(includePast
+        ? {}
+        : {
+            OR: [
+              { startDate: null },
+              { startDate: { gte: now } },
+              { endDate: { gte: now } },
+            ],
+          }),
+    };
   }
 
   async getPublicEvent(id: number) {

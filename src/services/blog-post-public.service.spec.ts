@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 describe('BlogPostPublicService', () => {
   let prisma: {
     blogCategoryTranslation: { findFirst: jest.Mock };
-    blogPost: { count: jest.Mock; findMany: jest.Mock };
+    blogPost: { count: jest.Mock; findMany: jest.Mock; groupBy: jest.Mock };
   };
   let service: BlogPostPublicService;
 
@@ -24,6 +24,10 @@ describe('BlogPostPublicService', () => {
       blogPost: {
         count: jest.fn().mockResolvedValue(1),
         findMany: jest.fn().mockResolvedValue([row]),
+        groupBy: jest.fn().mockResolvedValue([
+          { blogCategoryId: 1, _count: { _all: 2 } },
+          { blogCategoryId: 3, _count: { _all: 1 } },
+        ]),
       },
     };
     service = new BlogPostPublicService(prisma as unknown as PrismaService);
@@ -83,5 +87,18 @@ describe('BlogPostPublicService', () => {
     expect(page.nodes).toEqual([]);
     expect(page.pageInfo.totalCount).toBe(0);
     expect(prisma.blogPost.findMany).not.toHaveBeenCalled();
+  });
+
+  it('counts posts per category over the same posts the list shows', async () => {
+    await service.getPosts({ language: Language.EN, page: 1, pageSize: 12 });
+    const counts = await service.getPostCountsByCategory(Language.EN);
+
+    const { by, where } = prisma.blogPost.groupBy.mock.calls[0][0];
+    expect(by).toEqual(['blogCategoryId']);
+    expect(where).toEqual(prisma.blogPost.findMany.mock.calls[0][0].where);
+    expect(counts).toEqual([
+      { blogCategoryId: 1, count: 2 },
+      { blogCategoryId: 3, count: 1 },
+    ]);
   });
 });

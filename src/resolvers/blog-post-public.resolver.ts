@@ -5,6 +5,7 @@ import {
   BlogPostConnectionEntity,
   BlogPostEntity,
 } from '../catalog-v2/entities/blog-post.entity';
+import { BlogCategoryPostCountEntity } from '../catalog-v2/entities/blog-category-post-count.entity';
 import { BlogPostPublicService } from '../services/blog-post-public.service';
 
 /**
@@ -65,6 +66,18 @@ export class BlogPostPublicResolver {
       page,
       pageSize,
     });
+  }
+
+  @Query(() => [BlogCategoryPostCountEntity], {
+    name: 'blogPostCountsByCategory',
+    description:
+      'Published posts per blog category in the given language (the posts ' +
+      'getBlogPosts lists). Categories without posts are omitted. Public.',
+  })
+  async blogPostCountsByCategory(
+    @Args('language', { type: () => Language }) language: Language,
+  ) {
+    return this.blogPostPublicService.getPostCountsByCategory(language);
   }
 
   @Query(() => BlogPostEntity, {
