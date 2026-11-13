@@ -7,6 +7,7 @@ import {
 } from '@nestjs/apollo';
 import { APP_GUARD, ModuleRef, APP_INTERCEPTOR } from '@nestjs/core';
 import { AdminActivityInterceptor } from './common/admin-activity.interceptor';
+import { ListSizeCapInterceptor } from './common/list-size-cap.interceptor';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { GqlThrottlerGuard } from './common/guards/gql-throttler.guard';
@@ -87,6 +88,8 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
     { provide: APP_GUARD, useClass: GqlThrottlerGuard },
     // Every admin mutation leaves an AdminActivityLog row (USR-12).
     { provide: APP_INTERCEPTOR, useClass: AdminActivityInterceptor },
+    // No query reads more than 500 rows at once (GW-6).
+    { provide: APP_INTERCEPTOR, useClass: ListSizeCapInterceptor },
   ],
 })
 export class AppModule {}
