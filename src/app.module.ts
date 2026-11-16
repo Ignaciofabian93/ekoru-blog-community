@@ -5,8 +5,14 @@ import {
   ApolloFederationDriver,
   ApolloFederationDriverConfig,
 } from '@nestjs/apollo';
-import { APP_GUARD, ModuleRef, APP_INTERCEPTOR } from '@nestjs/core';
+import {
+  APP_FILTER,
+  APP_GUARD,
+  ModuleRef,
+  APP_INTERCEPTOR,
+} from '@nestjs/core';
 import { AdminActivityInterceptor } from './common/admin-activity.interceptor';
+import { GraphQLErrorLogFilter } from './common/exceptions/graphql-error-log.filter';
 import { ListSizeCapInterceptor } from './common/list-size-cap.interceptor';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
@@ -90,6 +96,8 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
     { provide: APP_INTERCEPTOR, useClass: AdminActivityInterceptor },
     // No query reads more than 500 rows at once (GW-6).
     { provide: APP_INTERCEPTOR, useClass: ListSizeCapInterceptor },
+    // One line per expected GraphQL error instead of Nest's stack trace.
+    { provide: APP_FILTER, useClass: GraphQLErrorLogFilter },
   ],
 })
 export class AppModule {}
